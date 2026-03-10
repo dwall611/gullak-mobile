@@ -2,6 +2,19 @@
 
 React Native (Expo) app for the Gullak financial dashboard.
 
+## Version History
+
+**v2.0.0** (2026-03-10)
+- Cash Forecast screen — monthly cash flow projections
+- Rewards screen — credit card points tracker  
+- Settings screen — manual sync, export, cache clear
+- More tab (5th tab) for new feature navigation
+- API client uses Tailscale IP (fixes analytics on mobile)
+
+**v1.0.0** (2026-03-09)
+- Initial release
+- Home, Transactions, Analytics, Accounts screens
+
 ## Features
 
 - **Home** — Summary cards (income, expenses, net flow, transaction count), daily spending bar chart, account-level spending breakdown

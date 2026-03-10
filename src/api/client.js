@@ -1,8 +1,8 @@
 // Gullak API Client
 // Connects to backend via Tailscale hostname
 
-const API_BASE = 'http://DeathStar:3001/api';
-// Fallback: 'http://100.84.80.76:3001/api'
+const API_BASE = 'http://100.84.80.76:3001/api';
+// Fallback: 'http://DeathStar:3001/api'
 
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const cache = new Map();
