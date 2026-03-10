@@ -127,4 +127,26 @@ export const api = {
 
   // Liabilities
   getLiabilities: () => fetchAPI('/liabilities', {}, true),
+
+  // Rewards
+  getRewards: () => fetchAPI('/rewards', {}, true),
+  calculateRewardPoints: (id, startDate, endDate) =>
+    fetchWithParams(`/rewards/${id}/calculate-points`, { start_date: startDate, end_date: endDate }, false),
+
+  // Recurring transactions (analytics detection)
+  getRecurringTransactions: (months = 3) =>
+    fetchWithParams('/analytics/recurring-transactions', { months }, true),
+
+  // Recurring transaction rules (managed)
+  getRecurringRules: () => fetchAPI('/recurring-transactions', {}, false),
+
+  // Categories
+  getCategories: () => fetchAPI('/categories', {}, true),
+
+  // Export (returns URL for user to open)
+  getExportUrl: (startDate, endDate, accountId) => {
+    const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
+    if (accountId) params.append('account_id', accountId);
+    return `http://DeathStar:3001/api/export/transactions?${params.toString()}`;
+  },
 };
