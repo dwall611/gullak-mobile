@@ -142,6 +142,29 @@ export const api = {
 
   // Categories
   getCategories: () => fetchAPI('/categories', {}, true),
+  createCategory: (data) => {
+    clearCache('categories');
+    return fetchAPI('/categories', { method: 'POST', body: JSON.stringify(data) });
+  },
+  updateCategory: (id, data) => {
+    clearCache('categories');
+    return fetchAPI(`/categories/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  },
+  deleteCategory: (id) => {
+    clearCache('categories');
+    return fetchAPI(`/categories/${id}`, { method: 'DELETE' });
+  },
+
+  // Category Rules
+  getCategoryRules: () => fetchAPI('/category-rules', {}, false),
+  createCategoryRule: (data) => fetchAPI('/category-rules', { method: 'POST', body: JSON.stringify(data) }),
+  updateCategoryRule: (id, data) => fetchAPI(`/category-rules/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteCategoryRule: (id) => fetchAPI(`/category-rules/${id}`, { method: 'DELETE' }),
+  toggleCategoryRule: (id, isActive) => fetchAPI(`/category-rules/${id}/toggle`, { method: 'POST', body: JSON.stringify({ is_active: isActive }) }),
+  applyCategoryRules: () => fetchAPI('/category-rules/apply', { method: 'POST' }),
+
+  // Alerts
+  getAlertHistory: (limit = 10) => fetchWithParams('/alerts/history', { limit }, false),
 
   // Export (returns URL for user to open)
   getExportUrl: (startDate, endDate, accountId) => {

@@ -12,6 +12,20 @@ import { colors, spacing, radius, fontSize, fontWeight } from '../utils/theme';
 
 const FEATURES = [
   {
+    title: 'Overview',
+    subtitle: 'Monthly snapshot: alerts, budgets & forecasts',
+    icon: 'grid-outline',
+    color: '#6366f1',
+    screen: 'Overview',
+  },
+  {
+    title: 'Category Rules',
+    subtitle: 'Auto-categorize transactions by pattern & amount',
+    icon: 'pricetag-outline',
+    color: '#10b981',
+    screen: 'CategoryRules',
+  },
+  {
     title: 'Cash Forecast',
     subtitle: 'Monthly cash flow with recurring projections',
     icon: 'trending-up-outline',

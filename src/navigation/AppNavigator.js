@@ -13,6 +13,8 @@ import { MoreScreen } from '../screens/MoreScreen';
 import { CashForecastScreen } from '../screens/CashForecastScreen';
 import { RewardsScreen } from '../screens/RewardsScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
+import { OverviewScreen } from '../screens/OverviewScreen';
+import { CategoryRulesScreen } from '../screens/CategoryRulesScreen';
 import { colors } from '../utils/theme';
 
 const Tab = createBottomTabNavigator();
@@ -51,6 +53,16 @@ function MoreNavigator() {
         name="MoreHome"
         component={MoreScreen}
         options={{ headerShown: false }}
+      />
+      <MoreStack.Screen
+        name="Overview"
+        component={OverviewScreen}
+        options={{ title: 'Overview', headerShown: false }}
+      />
+      <MoreStack.Screen
+        name="CategoryRules"
+        component={CategoryRulesScreen}
+        options={{ title: 'Category Rules', headerShown: false }}
       />
       <MoreStack.Screen
         name="CashForecast"
