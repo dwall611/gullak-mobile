@@ -424,6 +424,50 @@ function AlertRuleItem({ rule, onToggle, onDelete }) {
     conditionData = rule.condition_data;
   }
 
+  // Get display info based on rule type
+  const getRuleInfo = () => {
+    switch (rule.type) {
+      case 'spending_threshold':
+        return {
+          title: conditionData.category || 'Spending',
+          icon: 'trending-up',
+          description: `Alert when ${conditionData.category || 'spending'} exceeds $${conditionData.threshold?.toFixed(2) || 0} ${conditionData.period || 'monthly'}`,
+        };
+      case 'balance_threshold':
+        return {
+          title: 'Low Balance',
+          icon: 'wallet-outline',
+          description: `Alert when balance drops below $${conditionData.threshold?.toFixed(2) || 0}`,
+        };
+      case 'large_transaction':
+        return {
+          title: 'Large Transaction',
+          icon: 'alert-circle-outline',
+          description: `Alert for transactions over $${conditionData.threshold?.toFixed(2) || 0}`,
+        };
+      case 'payment_due':
+        return {
+          title: 'Payment Due',
+          icon: 'card-outline',
+          description: `Alert ${conditionData.days_before || 3} days before credit card payment due`,
+        };
+      case 'forecast_balance':
+        return {
+          title: `Forecast: ${conditionData.account || 'Account'}`,
+          icon: 'trending-down-outline',
+          description: `Alert when ${conditionData.account || 'account'} forecast drops below $${conditionData.threshold?.toFixed(2) || 0}`,
+        };
+      default:
+        return {
+          title: 'Alert Rule',
+          icon: 'notifications-outline',
+          description: `Type: ${rule.type}`,
+        };
+    }
+  };
+
+  const ruleInfo = getRuleInfo();
+
   return (
     <View style={styles.alertRuleItem}>
       <View style={styles.alertRuleHeader}>
@@ -433,7 +477,8 @@ function AlertRuleItem({ rule, onToggle, onDelete }) {
             size={20} 
             color={rule.is_active ? colors.income : colors.textMuted} 
           />
-          <Text style={styles.alertRuleCategory}>{conditionData.category || 'Unknown'}</Text>
+          <Ionicons name={ruleInfo.icon} size={16} color={colors.textSecondary} style={{ marginLeft: 4 }} />
+          <Text style={styles.alertRuleCategory}>{ruleInfo.title}</Text>
         </View>
         <View style={styles.alertRuleActions}>
           <TouchableOpacity onPress={() => onToggle(rule)} style={styles.ruleActionBtn}>
@@ -449,7 +494,7 @@ function AlertRuleItem({ rule, onToggle, onDelete }) {
         </View>
       </View>
       <Text style={styles.alertRuleDesc}>
-        Alert when spending exceeds ${conditionData.threshold?.toFixed(2)} {conditionData.period}
+        {ruleInfo.description}
       </Text>
       {rule.last_triggered_at && (
         <Text style={styles.alertRuleMeta}>
