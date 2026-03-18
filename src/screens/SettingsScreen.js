@@ -9,46 +9,21 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, radius, fontSize, fontWeight } from '../utils/theme';
-
-// Placeholder for sub-screens (to be implemented)
-function AlertsTab() {
-  return (
-    <View style={styles.tabContent}>
-      <Text style={styles.placeholderText}>Alerts</Text>
-      <Text style={styles.placeholderSubtext}>Coming soon...</Text>
-    </View>
-  );
-}
-
-function CategoriesTab() {
-  return (
-    <View style={styles.tabContent}>
-      <Text style={styles.placeholderText}>Categories</Text>
-      <Text style={styles.placeholderSubtext}>Coming soon...</Text>
-    </View>
-  );
-}
-
-function SyncTab() {
-  return (
-    <View style={styles.tabContent}>
-      <Text style={styles.placeholderText}>Sync</Text>
-      <Text style={styles.placeholderSubtext}>Coming soon...</Text>
-    </View>
-  );
-}
+import { AlertsScreen } from './AlertsScreen';
+import { CategoryRulesScreen } from './CategoryRulesScreen';
+import { SyncScreen } from './SyncScreen';
 
 const TABS = [
-  { id: 'alerts', label: 'Alerts', icon: 'notifications-outline', Component: AlertsTab },
-  { id: 'categories', label: 'Categories', icon: 'pricetag-outline', Component: CategoriesTab },
-  { id: 'sync', label: 'Sync', icon: 'sync-outline', Component: SyncTab },
+  { id: 'alerts', label: 'Alerts', icon: 'notifications-outline', Component: AlertsScreen },
+  { id: 'categories', label: 'Categories', icon: 'pricetag-outline', Component: CategoryRulesScreen },
+  { id: 'sync', label: 'Sync', icon: 'sync-outline', Component: SyncScreen },
 ];
 
 export function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState('alerts');
 
-  const ActiveComponent = TABS.find(t => t.id === activeTab)?.Component || AlertsTab;
+  const ActiveComponent = TABS.find(t => t.id === activeTab)?.Component || AlertsScreen;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -80,9 +55,9 @@ export function SettingsScreen() {
       </View>
 
       {/* Tab Content */}
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+      <View style={styles.content}>
         <ActiveComponent />
-      </ScrollView>
+      </View>
     </View>
   );
 }
@@ -135,26 +110,7 @@ const styles = StyleSheet.create({
   tabTextActive: {
     color: colors.primary,
   },
-  scrollView: {
+  content: {
     flex: 1,
-  },
-  scrollContent: {
-    padding: spacing.md,
-  },
-  tabContent: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: spacing.xxl,
-  },
-  placeholderText: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.semibold,
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
-  placeholderSubtext: {
-    fontSize: fontSize.base,
-    color: colors.textMuted,
   },
 });
