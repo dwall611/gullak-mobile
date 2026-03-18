@@ -7,6 +7,9 @@ import {
   RefreshControl,
   ActivityIndicator,
   TouchableOpacity,
+  Modal,
+  TextInput,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api/client';
@@ -80,16 +83,29 @@ function AlertItem({ alert, onAcknowledge }) {
 }
 
 export function AlertsScreen() {
+  const [viewMode, setViewMode] = useState('history'); // 'history' | 'rules'
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [alerts, setAlerts] = useState([]);
+  const [alertRules, setAlertRules] = useState([]);
   const [error, setError] = useState(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newRule, setNewRule] = useState({
+    type: 'spending_threshold',
+    category: '',
+    threshold: '',
+    period: 'monthly',
+  });
 
-  const loadAlerts = useCallback(async () => {
+  const loadData = useCallback(async () => {
     try {
       setError(null);
-      const data = await api.getAlertHistory(50);
-      setAlerts(data.alerts || []);
+      const [alertsData, rulesData] = await Promise.all([
+        api.getAlertHistory(50),
+        api.getAlertRules(),
+      ]);
+      setAlerts(alertsData.alerts || []);
+      setAlertRules(rulesData.rules || []);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -99,13 +115,13 @@ export function AlertsScreen() {
   }, []);
 
   useEffect(() => {
-    loadAlerts();
-  }, [loadAlerts]);
+    loadData();
+  }, [loadData]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    loadAlerts();
-  }, [loadAlerts]);
+    loadData();
+  }, [loadData]);
 
   const handleAcknowledge = async (alertId) => {
     try {
@@ -116,6 +132,64 @@ export function AlertsScreen() {
     } catch (err) {
       console.error('Error acknowledging alert:', err);
     }
+  };
+
+  const handleCreateRule = async () => {
+    if (!newRule.category || !newRule.threshold) {
+      Alert.alert('Error', 'Please fill in all fields');
+      return;
+    }
+
+    try {
+      const conditionData = {
+        category: newRule.category,
+        threshold: parseFloat(newRule.threshold),
+        period: newRule.period,
+      };
+
+      await api.createAlertRule({
+        type: newRule.type,
+        condition_data: JSON.stringify(conditionData),
+        is_active: 1,
+      });
+
+      setShowAddModal(false);
+      setNewRule({ type: 'spending_threshold', category: '', threshold: '', period: 'monthly' });
+      loadData();
+    } catch (err) {
+      Alert.alert('Error', err.message);
+    }
+  };
+
+  const handleToggleRule = async (rule) => {
+    try {
+      await api.toggleAlertRule(rule.id, !rule.is_active);
+      loadData();
+    } catch (err) {
+      Alert.alert('Error', err.message);
+    }
+  };
+
+  const handleDeleteRule = async (ruleId) => {
+    Alert.alert(
+      'Delete Alert Rule',
+      'Are you sure you want to delete this alert rule?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.deleteAlertRule(ruleId);
+              loadData();
+            } catch (err) {
+              Alert.alert('Error', err.message);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const activeAlerts = alerts.filter(a => !a.acknowledged);
@@ -134,7 +208,7 @@ export function AlertsScreen() {
       <View style={styles.center}>
         <Ionicons name="alert-circle-outline" size={40} color={colors.expense} />
         <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.retryBtn} onPress={loadAlerts}>
+        <TouchableOpacity style={styles.retryBtn} onPress={loadData}>
           <Text style={styles.retryBtnText}>Retry</Text>
         </TouchableOpacity>
       </View>
@@ -142,12 +216,45 @@ export function AlertsScreen() {
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
-      }
-    >
+    <View style={styles.container}>
+      {/* View Mode Toggle */}
+      <View style={styles.viewToggle}>
+        <TouchableOpacity
+          style={[styles.viewToggleBtn, viewMode === 'history' && styles.viewToggleBtnActive]}
+          onPress={() => setViewMode('history')}
+        >
+          <Ionicons 
+            name="time-outline" 
+            size={16} 
+            color={viewMode === 'history' ? colors.primary : colors.textMuted} 
+          />
+          <Text style={[styles.viewToggleText, viewMode === 'history' && styles.viewToggleTextActive]}>
+            History
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.viewToggleBtn, viewMode === 'rules' && styles.viewToggleBtnActive]}
+          onPress={() => setViewMode('rules')}
+        >
+          <Ionicons 
+            name="settings-outline" 
+            size={16} 
+            color={viewMode === 'rules' ? colors.primary : colors.textMuted} 
+          />
+          <Text style={[styles.viewToggleText, viewMode === 'rules' && styles.viewToggleTextActive]}>
+            Rules
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView
+        style={styles.scrollView}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+        }
+      >
+      {viewMode === 'history' && (
+        <>
       {/* Summary */}
       <View style={styles.summary}>
         <View style={styles.summaryItem}>
@@ -188,7 +295,162 @@ export function AlertsScreen() {
           <Text style={styles.emptySubtext}>You're all caught up!</Text>
         </View>
       )}
+        </>
+      )}
+
+      {viewMode === 'rules' && (
+        <>
+          {/* Add Rule Button */}
+          <TouchableOpacity 
+            style={styles.addButton}
+            onPress={() => setShowAddModal(true)}
+          >
+            <Ionicons name="add-circle" size={20} color="#fff" />
+            <Text style={styles.addButtonText}>New Alert Rule</Text>
+          </TouchableOpacity>
+
+          {/* Alert Rules List */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Active Rules ({alertRules.filter(r => r.is_active).length})</Text>
+            {alertRules.filter(r => r.is_active).map(rule => (
+              <AlertRuleItem 
+                key={rule.id} 
+                rule={rule} 
+                onToggle={handleToggleRule}
+                onDelete={handleDeleteRule}
+              />
+            ))}
+          </View>
+
+          {alertRules.filter(r => !r.is_active).length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Inactive Rules</Text>
+              {alertRules.filter(r => !r.is_active).map(rule => (
+                <AlertRuleItem 
+                  key={rule.id} 
+                  rule={rule} 
+                  onToggle={handleToggleRule}
+                  onDelete={handleDeleteRule}
+                />
+              ))}
+            </View>
+          )}
+
+          {alertRules.length === 0 && (
+            <View style={styles.empty}>
+              <Ionicons name="megaphone-outline" size={48} color={colors.textMuted} />
+              <Text style={styles.emptyText}>No alert rules</Text>
+              <Text style={styles.emptySubtext}>Create your first alert rule</Text>
+            </View>
+          )}
+        </>
+      )}
     </ScrollView>
+
+      {/* Add Rule Modal */}
+      <Modal
+        visible={showAddModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowAddModal(false)}
+      >
+        <View style={styles.modal}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>New Alert Rule</Text>
+            <TouchableOpacity onPress={() => setShowAddModal(false)}>
+              <Ionicons name="close" size={24} color={colors.text} />
+            </TouchableOpacity>
+          </View>
+          
+          <ScrollView style={styles.modalContent}>
+            <Text style={styles.inputLabel}>Alert Type</Text>
+            <View style={styles.typeButton}>
+              <Text style={styles.typeButtonText}>Spending Threshold</Text>
+            </View>
+
+            <Text style={styles.inputLabel}>Category</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g., Food & Dining"
+              placeholderTextColor={colors.textMuted}
+              value={newRule.category}
+              onChangeText={(text) => setNewRule({...newRule, category: text})}
+            />
+
+            <Text style={styles.inputLabel}>Threshold Amount ($)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g., 500"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="numeric"
+              value={newRule.threshold}
+              onChangeText={(text) => setNewRule({...newRule, threshold: text})}
+            />
+
+            <Text style={styles.inputLabel}>Period</Text>
+            <View style={styles.periodButtons}>
+              {['daily', 'weekly', 'monthly'].map(period => (
+                <TouchableOpacity
+                  key={period}
+                  style={[styles.periodButton, newRule.period === period && styles.periodButtonActive]}
+                  onPress={() => setNewRule({...newRule, period})}
+                >
+                  <Text style={[styles.periodButtonText, newRule.period === period && styles.periodButtonTextActive]}>
+                    {period.charAt(0).toUpperCase() + period.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TouchableOpacity style={styles.createButton} onPress={handleCreateRule}>
+              <Text style={styles.createButtonText}>Create Alert Rule</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+function AlertRuleItem({ rule, onToggle, onDelete }) {
+  let conditionData = {};
+  try {
+    conditionData = JSON.parse(rule.condition_data);
+  } catch {}
+
+  return (
+    <View style={styles.alertRuleItem}>
+      <View style={styles.alertRuleHeader}>
+        <View style={styles.alertRuleTitle}>
+          <Ionicons 
+            name={rule.is_active ? "checkmark-circle" : "checkmark-circle-outline"} 
+            size={20} 
+            color={rule.is_active ? colors.income : colors.textMuted} 
+          />
+          <Text style={styles.alertRuleCategory}>{conditionData.category || 'Unknown'}</Text>
+        </View>
+        <View style={styles.alertRuleActions}>
+          <TouchableOpacity onPress={() => onToggle(rule)} style={styles.ruleActionBtn}>
+            <Ionicons 
+              name={rule.is_active ? "pause-circle-outline" : "play-circle-outline"} 
+              size={20} 
+              color={colors.primary} 
+            />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => onDelete(rule.id)} style={styles.ruleActionBtn}>
+            <Ionicons name="trash-outline" size={18} color={colors.expense} />
+          </TouchableOpacity>
+        </View>
+      </View>
+      <Text style={styles.alertRuleDesc}>
+        Alert when spending exceeds ${conditionData.threshold?.toFixed(2)} {conditionData.period}
+      </Text>
+      {rule.last_triggered_at && (
+        <Text style={styles.alertRuleMeta}>
+          Last triggered: {formatDate(rule.last_triggered_at)} ({rule.trigger_count} times)
+        </Text>
+      )}
+    </View>
   );
 }
 
@@ -196,6 +458,184 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  viewToggle: {
+    flexDirection: 'row',
+    backgroundColor: colors.card,
+    margin: spacing.md,
+    marginBottom: spacing.sm,
+    padding: spacing.xs,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  viewToggleBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.sm,
+  },
+  viewToggleBtnActive: {
+    backgroundColor: colors.background,
+  },
+  viewToggleText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    color: colors.textMuted,
+  },
+  viewToggleTextActive: {
+    color: colors.primary,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.primary,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.md,
+  },
+  addButtonText: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.semibold,
+    color: '#fff',
+  },
+  alertRuleItem: {
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  alertRuleHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  alertRuleTitle: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  alertRuleCategory: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.semibold,
+    color: colors.text,
+  },
+  alertRuleActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  ruleActionBtn: {
+    padding: spacing.xs,
+  },
+  alertRuleDesc: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+  },
+  alertRuleMeta: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+  },
+  modal: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.cardBorder,
+  },
+  modalTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.bold,
+    color: colors.text,
+  },
+  modalContent: {
+    flex: 1,
+    padding: spacing.md,
+  },
+  inputLabel: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    color: colors.text,
+    marginBottom: spacing.sm,
+    marginTop: spacing.md,
+  },
+  input: {
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    fontSize: fontSize.base,
+    color: colors.text,
+  },
+  typeButton: {
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  typeButtonText: {
+    fontSize: fontSize.base,
+    color: colors.primary,
+    fontWeight: fontWeight.medium,
+  },
+  periodButtons: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  periodButton: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    backgroundColor: colors.card,
+    alignItems: 'center',
+  },
+  periodButtonActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  periodButtonText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    color: colors.textSecondary,
+  },
+  periodButtonTextActive: {
+    color: '#fff',
+  },
+  createButton: {
+    backgroundColor: colors.primary,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    alignItems: 'center',
+    marginTop: spacing.lg,
+  },
+  createButtonText: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.semibold,
+    color: '#fff',
   },
   center: {
     flex: 1,

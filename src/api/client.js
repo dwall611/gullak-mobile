@@ -165,6 +165,11 @@ export const api = {
 
   // Alerts
   getAlertHistory: (limit = 10) => fetchWithParams('/alerts/history', { limit }, false),
+  getAlertRules: () => fetchAPI('/alert-rules', {}, false),
+  createAlertRule: (data) => fetchAPI('/alert-rules', { method: 'POST', body: JSON.stringify(data) }),
+  updateAlertRule: (id, data) => fetchAPI(`/alert-rules/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteAlertRule: (id) => fetchAPI(`/alert-rules/${id}`, { method: 'DELETE' }),
+  toggleAlertRule: (id, isActive) => fetchAPI(`/alert-rules/${id}/toggle`, { method: 'POST', body: JSON.stringify({ is_active: isActive }) }),
 
   // Export (returns URL for user to open)
   getExportUrl: (startDate, endDate, accountId) => {
