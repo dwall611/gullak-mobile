@@ -128,7 +128,7 @@ function TransactionRow({ tx }) {
 }
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
-export function CashForecastScreen() {
+export function CashForecastScreen({ embedded = false }) {
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -401,9 +401,9 @@ export function CashForecastScreen() {
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, embedded ? {} : { paddingTop: insets.top }]}>
       {/* Header */}
-      <View style={styles.header}>
+      {!embedded && <View style={styles.header}>
         <View>
           <Text style={styles.headerTitle}>Cash Forecast</Text>
           <Text style={styles.headerSub}>{monthLabel}</Text>
@@ -423,7 +423,7 @@ export function CashForecastScreen() {
             ))}
           </View>
         )}
-      </View>
+      </View>}
 
       <ScrollView
         showsVerticalScrollIndicator={false}

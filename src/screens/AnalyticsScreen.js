@@ -1,55 +1,40 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, radius, fontSize, fontWeight } from '../utils/theme';
-
-// Placeholder for sub-screens (to be implemented)
-function CashForecastTab() {
-  return (
-    <View style={styles.tabContent}>
-      <Text style={styles.placeholderText}>Cash Forecast</Text>
-      <Text style={styles.placeholderSubtext}>Coming soon...</Text>
-    </View>
-  );
-}
-
-function CashBurnTab() {
-  return (
-    <View style={styles.tabContent}>
-      <Text style={styles.placeholderText}>Cash Burn</Text>
-      <Text style={styles.placeholderSubtext}>Coming soon...</Text>
-    </View>
-  );
-}
-
-function RewardsTab() {
-  return (
-    <View style={styles.tabContent}>
-      <Text style={styles.placeholderText}>Rewards</Text>
-      <Text style={styles.placeholderSubtext}>Coming soon...</Text>
-    </View>
-  );
-}
+import { CashForecastScreen } from './CashForecastScreen';
+import { CashBurnScreen } from './CashBurnScreen';
+import { RewardsScreen } from './RewardsScreen';
 
 const TABS = [
-  { id: 'cash-forecast', label: 'Cash Forecast', icon: 'trending-down-outline', Component: CashForecastTab },
-  { id: 'cash-burn', label: 'Cash Burn', icon: 'flame-outline', Component: CashBurnTab },
-  { id: 'rewards', label: 'Rewards', icon: 'gift-outline', Component: RewardsTab },
+  { id: 'cash-forecast', label: 'Cash Forecast', icon: 'trending-down-outline' },
+  { id: 'cash-burn', label: 'Cash Burn', icon: 'flame-outline' },
+  { id: 'rewards', label: 'Rewards', icon: 'gift-outline' },
 ];
 
 export function AnalyticsScreen() {
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState('cash-forecast');
 
-  const ActiveComponent = TABS.find(t => t.id === activeTab)?.Component || CashForecastTab;
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'cash-forecast':
+        return <CashForecastScreen embedded />;
+      case 'cash-burn':
+        return <CashBurnScreen embedded />;
+      case 'rewards':
+        return <RewardsScreen embedded />;
+      default:
+        return null;
+    }
+  };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -81,9 +66,9 @@ export function AnalyticsScreen() {
       </View>
 
       {/* Tab Content */}
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        <ActiveComponent />
-      </ScrollView>
+      <View style={styles.content}>
+        {renderContent()}
+      </View>
     </View>
   );
 }
@@ -136,26 +121,7 @@ const styles = StyleSheet.create({
   tabTextActive: {
     color: colors.primary,
   },
-  scrollView: {
+  content: {
     flex: 1,
-  },
-  scrollContent: {
-    padding: spacing.md,
-  },
-  tabContent: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: spacing.xxl,
-  },
-  placeholderText: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.semibold,
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
-  placeholderSubtext: {
-    fontSize: fontSize.base,
-    color: colors.textMuted,
   },
 });

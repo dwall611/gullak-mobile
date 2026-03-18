@@ -185,7 +185,7 @@ function ProgramGroup({ programName, cards }) {
 }
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
-export function RewardsScreen() {
+export function RewardsScreen({ embedded = false }) {
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -250,10 +250,10 @@ export function RewardsScreen() {
 
   if (loading && !refreshing) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
-        <View style={styles.header}>
+      <View style={[styles.container, embedded ? {} : { paddingTop: insets.top }]}>
+        {!embedded && <View style={styles.header}>
           <Text style={styles.headerTitle}>Rewards</Text>
-        </View>
+        </View>}
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
@@ -263,10 +263,10 @@ export function RewardsScreen() {
 
   if (error) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
-        <View style={styles.header}>
+      <View style={[styles.container, embedded ? {} : { paddingTop: insets.top }]}>
+        {!embedded && <View style={styles.header}>
           <Text style={styles.headerTitle}>Rewards</Text>
-        </View>
+        </View>}
         <View style={styles.center}>
           <Ionicons name="alert-circle-outline" size={40} color={colors.expense} />
           <Text style={styles.errorText}>{error}</Text>
@@ -279,8 +279,8 @@ export function RewardsScreen() {
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
+    <View style={[styles.container, embedded ? {} : { paddingTop: insets.top }]}>
+      {!embedded && <View style={styles.header}>
         <View>
           <Text style={styles.headerTitle}>Rewards</Text>
           <Text style={styles.headerSub}>Points earned from transactions</Text>
@@ -289,7 +289,7 @@ export function RewardsScreen() {
           <Text style={styles.totalBadgeValue}>{formatPoints(totalPointsAllPrograms)}</Text>
           <Text style={styles.totalBadgeLabel}>total pts</Text>
         </View>
-      </View>
+      </View>}
 
       {/* Date filter */}
       <View style={styles.filterRow}>
