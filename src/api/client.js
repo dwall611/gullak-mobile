@@ -163,13 +163,13 @@ export const api = {
   toggleCategoryRule: (id, isActive) => fetchAPI(`/category-rules/${id}/toggle`, { method: 'POST', body: JSON.stringify({ is_active: isActive }) }),
   applyCategoryRules: () => fetchAPI('/category-rules/apply', { method: 'POST' }),
 
-  // Alerts
-  getAlertHistory: (limit = 10) => fetchWithParams('/alerts/history', { limit }, false),
-  getAlertRules: () => fetchAPI('/alert-rules', {}, false),
-  createAlertRule: (data) => fetchAPI('/alert-rules', { method: 'POST', body: JSON.stringify(data) }),
-  updateAlertRule: (id, data) => fetchAPI(`/alert-rules/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deleteAlertRule: (id) => fetchAPI(`/alert-rules/${id}`, { method: 'DELETE' }),
-  toggleAlertRule: (id, isActive) => fetchAPI(`/alert-rules/${id}/toggle`, { method: 'POST', body: JSON.stringify({ is_active: isActive }) }),
+  // Alerts (using /alerts/* endpoints to match web dashboard)
+  getAlertHistory: (limit = 50) => fetchWithParams('/alerts/history', { limit }, false),
+  getAlertRules: () => fetchAPI('/alerts/rules', {}, false),
+  createAlertRule: (data) => fetchAPI('/alerts/rules', { method: 'POST', body: JSON.stringify(data) }),
+  updateAlertRule: (id, data) => fetchAPI(`/alerts/rules/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteAlertRule: (id) => fetchAPI(`/alerts/rules/${id}`, { method: 'DELETE' }),
+  acknowledgeAlert: (id) => fetchAPI(`/alerts/${id}/acknowledge`, { method: 'PATCH' }),
 
   // Export (returns URL for user to open)
   getExportUrl: (startDate, endDate, accountId) => {

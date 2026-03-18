@@ -125,12 +125,13 @@ export function AlertsScreen() {
 
   const handleAcknowledge = async (alertId) => {
     try {
-      // The API doesn't have an acknowledge endpoint, but we can mark it locally
+      await api.acknowledgeAlert(alertId);
       setAlerts(prev => prev.map(a => 
         a.id === alertId ? { ...a, acknowledged: true } : a
       ));
     } catch (err) {
       console.error('Error acknowledging alert:', err);
+      Alert.alert('Error', 'Failed to acknowledge alert');
     }
   };
 
@@ -149,8 +150,8 @@ export function AlertsScreen() {
 
       await api.createAlertRule({
         type: newRule.type,
-        condition_data: JSON.stringify(conditionData),
-        is_active: 1,
+        condition_data: conditionData,  // API expects object, not string
+        is_active: true,
       });
 
       setShowAddModal(false);
@@ -163,7 +164,7 @@ export function AlertsScreen() {
 
   const handleToggleRule = async (rule) => {
     try {
-      await api.toggleAlertRule(rule.id, !rule.is_active);
+      await api.updateAlertRule(rule.id, { is_active: !rule.is_active });
       loadData();
     } catch (err) {
       Alert.alert('Error', err.message);
@@ -413,10 +414,15 @@ export function AlertsScreen() {
 }
 
 function AlertRuleItem({ rule, onToggle, onDelete }) {
+  // Handle condition_data that might be object or string
   let conditionData = {};
-  try {
-    conditionData = JSON.parse(rule.condition_data);
-  } catch {}
+  if (typeof rule.condition_data === 'string') {
+    try {
+      conditionData = JSON.parse(rule.condition_data);
+    } catch {}
+  } else if (rule.condition_data && typeof rule.condition_data === 'object') {
+    conditionData = rule.condition_data;
+  }
 
   return (
     <View style={styles.alertRuleItem}>
