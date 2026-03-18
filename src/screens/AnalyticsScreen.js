@@ -1,149 +1,55 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  RefreshControl,
+  TouchableOpacity,
   ActivityIndicator,
-  Dimensions,
 } from 'react-native';
-import { BarChart, LineChart } from 'react-native-chart-kit';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { api } from '../api/client';
-import { DateRangeSelector } from '../components/DateRangeSelector';
-import { formatCurrency, formatCompact, getDateRange, getAvailableMonths, getCategoryColor } from '../utils/helpers';
 import { colors, spacing, radius, fontSize, fontWeight } from '../utils/theme';
 
-const screenWidth = Dimensions.get('window').width;
-
-function SectionTitle({ title }) {
-  return <Text style={styles.sectionTitle}>{title}</Text>;
-}
-
-function CategoryRow({ category, amount, total, index }) {
-  const pct = total > 0 ? (amount / total) * 100 : 0;
-  const barColor = getCategoryColor(index);
+// Placeholder for sub-screens (to be implemented)
+function CashForecastTab() {
   return (
-    <View style={styles.categoryRow}>
-      <View style={[styles.categoryDot, { backgroundColor: barColor }]} />
-      <View style={styles.categoryInfo}>
-        <View style={styles.categoryNameRow}>
-          <Text style={styles.categoryName} numberOfLines={1}>{category}</Text>
-          <Text style={styles.categoryAmt}>{formatCompact(amount)}</Text>
-        </View>
-        <View style={styles.categoryBar}>
-          <View
-            style={[
-              styles.categoryBarFill,
-              { width: `${Math.max(pct, 1)}%`, backgroundColor: barColor },
-            ]}
-          />
-        </View>
-        <Text style={styles.categoryPct}>{pct.toFixed(1)}%</Text>
-      </View>
+    <View style={styles.tabContent}>
+      <Text style={styles.placeholderText}>Cash Forecast</Text>
+      <Text style={styles.placeholderSubtext}>Coming soon...</Text>
     </View>
   );
 }
 
+function CashBurnTab() {
+  return (
+    <View style={styles.tabContent}>
+      <Text style={styles.placeholderText}>Cash Burn</Text>
+      <Text style={styles.placeholderSubtext}>Coming soon...</Text>
+    </View>
+  );
+}
+
+function RewardsTab() {
+  return (
+    <View style={styles.tabContent}>
+      <Text style={styles.placeholderText}>Rewards</Text>
+      <Text style={styles.placeholderSubtext}>Coming soon...</Text>
+    </View>
+  );
+}
+
+const TABS = [
+  { id: 'cash-forecast', label: 'Cash Forecast', icon: 'trending-down-outline', Component: CashForecastTab },
+  { id: 'cash-burn', label: 'Cash Burn', icon: 'flame-outline', Component: CashBurnTab },
+  { id: 'rewards', label: 'Rewards', icon: 'gift-outline', Component: RewardsTab },
+];
+
 export function AnalyticsScreen() {
   const insets = useSafeAreaInsets();
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState('cash-forecast');
 
-  const [dateRange, setDateRange] = useState('mtd');
-  const [selectedMonth, setSelectedMonth] = useState('');
-  const availableMonths = useMemo(() => getAvailableMonths(), []);
-
-  const [categoryTotals, setCategoryTotals] = useState([]);
-  const [trendsData, setTrendsData] = useState([]);
-  const [topMerchants, setTopMerchants] = useState([]);
-
-  const loadData = useCallback(async () => {
-    try {
-      const { start_date, end_date } = getDateRange(
-        selectedMonth ? 'month' : dateRange,
-        selectedMonth
-      );
-
-      const [catData, trends, merchants] = await Promise.all([
-        api.getSpendingByCategory(start_date, end_date, false),
-        api.getSpendingTrends(6),
-        api.getTopMerchants(start_date, end_date, 10),
-      ]);
-
-      const cats = (catData.data || [])
-        .map((d) => ({ category: d.category_name, amount: d.total || 0 }))
-        .filter((d) => d.amount > 0)
-        .sort((a, b) => b.amount - a.amount);
-      setCategoryTotals(cats);
-
-      setTrendsData(trends.data || []);
-      setTopMerchants(merchants.data || []);
-    } catch (err) {
-      console.error('Error loading analytics:', err);
-    }
-  }, [dateRange, selectedMonth]);
-
-  useEffect(() => {
-    setLoading(true);
-    loadData().finally(() => setLoading(false));
-  }, [loadData]);
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await loadData();
-    setRefreshing(false);
-  }, [loadData]);
-
-  const totalSpend = useMemo(
-    () => categoryTotals.reduce((s, c) => s + c.amount, 0),
-    [categoryTotals]
-  );
-
-  // Build trends chart data (last 6 months)
-  const trendsChartData = useMemo(() => {
-    if (!trendsData.length) return null;
-    const sorted = [...trendsData].sort((a, b) => a.month?.localeCompare(b.month));
-    const labels = sorted.map((d) => {
-      const [y, m] = (d.month || '').split('-');
-      if (!m) return '';
-      const date = new Date(parseInt(y), parseInt(m) - 1, 1);
-      return date.toLocaleDateString('en-US', { month: 'short' });
-    });
-    return {
-      labels,
-      datasets: [
-        {
-          data: sorted.map((d) => Math.abs(d.expenses || 0)),
-          color: (opacity = 1) => `rgba(239, 68, 68, ${opacity})`,
-          strokeWidth: 2,
-        },
-        {
-          data: sorted.map((d) => Math.abs(d.income || 0)),
-          color: (opacity = 1) => `rgba(16, 185, 129, ${opacity})`,
-          strokeWidth: 2,
-        },
-      ],
-      legend: ['Expenses', 'Income'],
-    };
-  }, [trendsData]);
-
-  const chartConfig = {
-    backgroundGradientFrom: colors.card,
-    backgroundGradientTo: colors.card,
-    color: (opacity = 1) => `rgba(99, 102, 241, ${opacity})`,
-    labelColor: () => colors.textSecondary,
-    decimalPlaces: 0,
-    propsForBackgroundLines: {
-      stroke: colors.cardBorder,
-      strokeWidth: 1,
-    },
-    formatYLabel: (v) => formatCompact(parseFloat(v)),
-    propsForDots: {
-      r: '3',
-    },
-  };
+  const ActiveComponent = TABS.find(t => t.id === activeTab)?.Component || CashForecastTab;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -152,97 +58,32 @@ export function AnalyticsScreen() {
         <Text style={styles.headerTitle}>Analytics</Text>
       </View>
 
-      <DateRangeSelector
-        selected={selectedMonth ? 'month' : dateRange}
-        onSelect={(v) => { setDateRange(v); setSelectedMonth(''); }}
-        months={availableMonths.slice(0, 6)}
-        selectedMonth={selectedMonth}
-        onSelectMonth={(m) => {
-          setSelectedMonth(m === selectedMonth ? '' : m);
-          if (m !== selectedMonth) setDateRange('month');
-        }}
-      />
-
-      {loading ? (
-        <View style={styles.loading}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading analytics...</Text>
-        </View>
-      ) : (
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
-          }
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Income vs Expenses Trends */}
-          {trendsChartData && (
-            <View style={styles.card}>
-              <SectionTitle title="Income vs Expenses (6 months)" />
-              <LineChart
-                data={trendsChartData}
-                width={screenWidth - spacing.md * 2 - spacing.md * 2}
-                height={200}
-                chartConfig={chartConfig}
-                bezier
-                style={styles.chart}
-                withDots
-                withShadow={false}
-                legend={trendsChartData.legend}
+      {/* Tab Bar */}
+      <View style={styles.tabBar}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabBarContent}>
+          {TABS.map(({ id, label, icon }) => (
+            <TouchableOpacity
+              key={id}
+              onPress={() => setActiveTab(id)}
+              style={[styles.tab, activeTab === id && styles.tabActive]}
+            >
+              <Ionicons
+                name={icon}
+                size={16}
+                color={activeTab === id ? colors.primary : colors.textMuted}
               />
-            </View>
-          )}
-
-          {/* Spending by Category */}
-          {categoryTotals.length > 0 && (
-            <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <SectionTitle title="Spending by Category" />
-                <Text style={styles.totalText}>{formatCurrency(totalSpend)}</Text>
-              </View>
-              {categoryTotals.slice(0, 12).map((c, i) => (
-                <CategoryRow
-                  key={c.category}
-                  category={c.category}
-                  amount={c.amount}
-                  total={totalSpend}
-                  index={i}
-                />
-              ))}
-            </View>
-          )}
-
-          {/* Top Merchants */}
-          {topMerchants.length > 0 && (
-            <View style={styles.card}>
-              <SectionTitle title="Top Merchants" />
-              {topMerchants.slice(0, 10).map((m, i) => (
-                <View key={m.merchant_name || i} style={styles.merchantRow}>
-                  <View style={styles.merchantRank}>
-                    <Text style={styles.merchantRankText}>{i + 1}</Text>
-                  </View>
-                  <Text style={styles.merchantName} numberOfLines={1}>
-                    {m.merchant_name || 'Unknown'}
-                  </Text>
-                  <View style={styles.merchantRight}>
-                    <Text style={styles.merchantAmt}>{formatCurrency(m.total_amount || 0)}</Text>
-                    <Text style={styles.merchantCount}>{m.transaction_count} txns</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {categoryTotals.length === 0 && topMerchants.length === 0 && (
-            <View style={styles.empty}>
-              <Text style={styles.emptyText}>No analytics data for this period</Text>
-            </View>
-          )}
-
-          <View style={{ height: insets.bottom + spacing.xl }} />
+              <Text style={[styles.tabText, activeTab === id && styles.tabTextActive]}>
+                {label}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </ScrollView>
-      )}
+      </View>
+
+      {/* Tab Content */}
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <ActiveComponent />
+      </ScrollView>
     </View>
   );
 }
@@ -254,152 +95,67 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.cardBorder,
   },
   headerTitle: {
     fontSize: fontSize.xxl,
     fontWeight: fontWeight.bold,
     color: colors.text,
   },
-  loading: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: spacing.md,
+  tabBar: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.cardBorder,
   },
-  loadingText: {
-    color: colors.textSecondary,
+  tabBarContent: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+  },
+  tab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    marginRight: spacing.sm,
+  },
+  tabActive: {
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  tabText: {
     fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    color: colors.textMuted,
+  },
+  tabTextActive: {
+    color: colors.primary,
+  },
+  scrollView: {
+    flex: 1,
   },
   scrollContent: {
     padding: spacing.md,
-    gap: spacing.md,
   },
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    marginBottom: spacing.md,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
-  sectionTitle: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold,
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
-  totalText: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    fontWeight: fontWeight.medium,
-  },
-  chart: {
-    borderRadius: radius.sm,
-    marginHorizontal: -spacing.sm,
-  },
-
-  // Category rows
-  categoryRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingVertical: 6,
-    gap: spacing.sm,
-  },
-  categoryDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginTop: 4,
-    flexShrink: 0,
-  },
-  categoryInfo: {
+  tabContent: {
     flex: 1,
-    gap: 3,
-  },
-  categoryNameRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  categoryName: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    flex: 1,
-    marginRight: spacing.sm,
-  },
-  categoryAmt: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold,
-    color: colors.text,
-  },
-  categoryBar: {
-    height: 4,
-    backgroundColor: colors.cardBorder,
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  categoryBarFill: {
-    height: '100%',
-    borderRadius: 2,
-  },
-  categoryPct: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-  },
-
-  // Merchant rows
-  merchantRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    gap: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.separator,
-  },
-  merchantRank: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingVertical: spacing.xxl,
   },
-  merchantRankText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.bold,
-    color: colors.textMuted,
-  },
-  merchantName: {
-    flex: 1,
-    fontSize: fontSize.sm,
-    color: colors.text,
-  },
-  merchantRight: {
-    alignItems: 'flex-end',
-  },
-  merchantAmt: {
-    fontSize: fontSize.sm,
+  placeholderText: {
+    fontSize: fontSize.xl,
     fontWeight: fontWeight.semibold,
     color: colors.text,
+    marginBottom: spacing.sm,
   },
-  merchantCount: {
-    fontSize: fontSize.xs,
+  placeholderSubtext: {
+    fontSize: fontSize.base,
     color: colors.textMuted,
-  },
-
-  empty: {
-    paddingVertical: spacing.xxl,
-    alignItems: 'center',
-  },
-  emptyText: {
-    color: colors.textMuted,
-    fontSize: fontSize.sm,
   },
 });

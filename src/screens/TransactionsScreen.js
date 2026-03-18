@@ -354,10 +354,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'baseline',
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingTop: spacing.xs,
+    paddingBottom: 0,
   },
   headerTitle: {
-    fontSize: fontSize.xxl,
+    fontSize: fontSize.xl,
     fontWeight: fontWeight.bold,
     color: colors.text,
   },
@@ -368,6 +369,7 @@ const styles = StyleSheet.create({
   searchRow: {
     flexDirection: 'row',
     paddingHorizontal: spacing.md,
+    paddingTop: spacing.xs,
     paddingBottom: spacing.sm,
     gap: spacing.sm,
   },
@@ -422,6 +424,11 @@ const styles = StyleSheet.create({
   activeFilters: {
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.sm,
+    maxHeight: 32,
+  },
+  activeFiltersContent: {
+    alignItems: 'center',
+    gap: spacing.xs,
   },
   activeChip: {
     flexDirection: 'row',
@@ -430,15 +437,16 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
-    marginRight: spacing.xs,
     gap: 4,
     borderWidth: 1,
     borderColor: `${colors.primary}40`,
+    maxWidth: 150,
   },
   activeChipText: {
     fontSize: fontSize.xs,
     color: colors.primary,
     fontWeight: fontWeight.medium,
+    flexShrink: 1,
   },
   list: {
     flex: 1,

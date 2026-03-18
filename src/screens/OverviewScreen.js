@@ -206,7 +206,7 @@ function SpendingByCategory({ data }) {
             <View style={styles.categoryInfo}>
               <View style={styles.categoryNameRow}>
                 <Text style={styles.categoryName} numberOfLines={1}>{item.category}</Text>
-                <Text style={styles.categoryAmt}>{formatCompact(item.amount)}</Text>
+                <Text style={styles.categoryAmt}>{formatCompact(item.amount)} <Text style={styles.categoryPct}>({pct.toFixed(0)}%)</Text></Text>
               </View>
               <View style={styles.categoryBar}>
                 <View style={[styles.categoryBarFill, { width: `${Math.max(pct, 1)}%`, backgroundColor: barColor }]} />
@@ -223,17 +223,15 @@ function SpendingByCategory({ data }) {
 function ForecastChart({ rows, todayStr }) {
   if (!rows || rows.length < 2) return null;
 
-  // Sample to max 20 points for readability
-  const step = Math.max(1, Math.ceil(rows.length / 20));
-  const sampled = rows.filter((_, i) => i % step === 0 || i === rows.length - 1);
-
-  const labels = sampled.map(r => {
+  const labels = rows.map(r => {
     const [, m, d] = r.date.split('-');
     return `${parseInt(m)}/${parseInt(d)}`;
   });
 
-  const balanceData = sampled.map(r => r.balance ?? 0);
-  const todayIdx = sampled.findIndex(r => r.date >= todayStr);
+  const balanceData = rows.map(r => r.balance ?? 0);
+  const paidData = rows.map(r => r.paid ?? 0);
+  const receivedData = rows.map(r => r.received ?? 0);
+  const todayIdx = rows.findIndex(r => r.date >= todayStr);
 
   const chartData = {
     labels,
@@ -241,10 +239,20 @@ function ForecastChart({ rows, todayStr }) {
       {
         data: balanceData,
         color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
-        strokeWidth: 2,
+        strokeWidth: 3,
+      },
+      {
+        data: paidData,
+        color: (opacity = 1) => `rgba(239, 68, 68, ${opacity})`,
+        strokeWidth: 2.5,
+      },
+      {
+        data: receivedData,
+        color: (opacity = 1) => `rgba(16, 185, 129, ${opacity})`,
+        strokeWidth: 2.5,
       },
     ],
-    legend: ['Balance'],
+    legend: ['Balance', 'Paid', 'Received'],
   };
 
   const chartConfig = {
@@ -332,16 +340,17 @@ export function OverviewScreen() {
   const [budgetData, setBudgetData] = useState(null);
   const [forecastData, setForecastData] = useState([]);
 
+  const formatDateStr = (d) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
   const dates = useMemo(() => {
     const now = new Date();
     const year = now.getFullYear();
     const month = now.getMonth();
-    const formatDateStr = (d) => {
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `${y}-${m}-${day}`;
-    };
     const todayStr = formatDateStr(now);
     const yesterday = formatDateStr(new Date(year, month, now.getDate() - 1));
     const startDate = formatDateStr(new Date(year, month, 1));
@@ -442,8 +451,110 @@ export function OverviewScreen() {
 
         setBudgetData({ budget, spent: discretionarySpent, timePct, burnPct });
 
-        // Forecast
+        // Forecast - Recurring Projections
         const projectedRows = [];
+        
+        // Add recurring expense projections
+        const addDays = (d, n) => {
+          const result = new Date(d);
+          result.setDate(result.getDate() + n);
+          return result;
+        };
+
+        const interval = (rec) => {
+          const avg = rec.avgInterval;
+          if (avg == null || isNaN(avg) || avg <= 0) return 30;
+          return Math.max(Math.round(avg), 7);
+        };
+
+        const HUDSON_OVERRIDE = { amount: 6082, dayOfMonth: 1, skipMonths: [5, 6] };
+        const getOverride = (merchant) => {
+          if (merchant.toLowerCase().includes('hudson')) return HUDSON_OVERRIDE;
+          return null;
+        };
+
+        const generateDates = (rec) => {
+          const override = getOverride(rec.merchant);
+          const dom = rec.dayOfMonth ?? rec.day_of_month ?? (override?.dayOfMonth);
+          const currentMonthStr = dates.todayStr.substring(0, 7);
+          const today = new Date(dates.todayStr);
+
+          if (dom != null && !isNaN(dom)) {
+            const projDates = [];
+            for (let mo = 0; mo <= 1; mo++) {
+              const d = new Date(today.getFullYear(), today.getMonth() + mo, dom);
+              const dStr = formatDateStr(d);
+              if (dStr > dates.projectionEndDate) break;
+              if (dStr <= dates.todayStr) continue;
+              if (override?.skipMonths?.includes(d.getMonth())) continue;
+              projDates.push(dStr);
+            }
+            return projDates;
+          }
+
+          if (!rec.nextExpected) return [];
+          let cursor = new Date(rec.nextExpected);
+          if (isNaN(cursor.getTime())) return [];
+          const step = interval(rec);
+          while (formatDateStr(cursor) <= dates.todayStr) {
+            cursor = addDays(cursor, step);
+          }
+          const projDates = [];
+          while (true) {
+            const d = formatDateStr(cursor);
+            if (d > dates.projectionEndDate) break;
+            projDates.push(d);
+            cursor = addDays(cursor, step);
+          }
+          return projDates;
+        };
+
+        // Project API-detected recurring patterns
+        for (const rec of mainRecurring) {
+          if (rec.category === 'Credit Card Payments' || rec.category === 'Transfer') continue;
+          const alreadyPaid = checkingTxns.some((tx) =>
+            merchantMatches(rec.merchant, tx.merchant_name || tx.name || '')
+          );
+          const step = interval(rec);
+          const currentMonthStr = dates.todayStr.substring(0, 7);
+          for (const projDateStr of generateDates(rec)) {
+            if (alreadyPaid && step >= 28 && projDateStr.substring(0, 7) === currentMonthStr) continue;
+            projectedRows.push({
+              id: `proj-${rec.merchant}-${projDateStr}`,
+              date: projDateStr,
+              name: rec.merchant,
+              merchant_name: rec.merchant,
+              amount: rec.avgAmount,
+              isProjected: true,
+            });
+          }
+        }
+
+        // Project manual recurring
+        const today = new Date(dates.todayStr);
+        for (const manual of MANUAL_RECURRING) {
+          const alreadyPaid = checkingTxns.some((tx) =>
+            (tx.merchant_name || tx.name || '').toLowerCase().includes(manual.keyword)
+          );
+          const currentMonthStr = dates.todayStr.substring(0, 7);
+          for (let mo = 0; mo <= 1; mo++) {
+            const d = new Date(today.getFullYear(), today.getMonth() + mo, manual.dayOfMonth);
+            const dStr = formatDateStr(d);
+            if (dStr <= dates.todayStr || dStr > dates.projectionEndDate) continue;
+            if (manual.skipMonths?.includes(d.getMonth())) continue;
+            if (alreadyPaid && dStr.substring(0, 7) === currentMonthStr) continue;
+            projectedRows.push({
+              id: `proj-manual-${manual.id}-${dStr}`,
+              date: dStr,
+              name: manual.merchant,
+              merchant_name: manual.merchant,
+              amount: manual.amount,
+              isProjected: true,
+            });
+          }
+        }
+
+        // Add CC payment projections
         try {
           const creditCards = liabResp?.credit_cards || [];
           for (const cc of creditCards) {
@@ -486,15 +597,30 @@ export function OverviewScreen() {
           for (let i = anchorIdx - 1; i >= 0; i--) { balances[i] = balances[i + 1] + allRows[i + 1].amount; }
         }
 
-        const rowsWithBalance = allRows.map((tx, idx) => ({
-          date: tx.date,
-          balance: balances[idx],
-          isProjected: tx.isProjected || tx.isCCPayment,
-        }));
+        // Add paid/received tracking
+        let runPaid = 0, runReceived = 0;
+        const rowsWithBalance = allRows.map((tx, idx) => {
+          if (tx.amount > 0) runPaid += tx.amount;
+          else runReceived += Math.abs(tx.amount);
+          return {
+            date: tx.date,
+            balance: balances[idx],
+            paid: runPaid,
+            received: runReceived,
+            isProjected: tx.isProjected || tx.isCCPayment,
+          };
+        });
 
+        // Aggregate by date
         const byDate = new Map();
         for (const r of rowsWithBalance) {
-          byDate.set(r.date, r);
+          byDate.set(r.date, {
+            date: r.date,
+            balance: r.balance,
+            paid: r.paid,
+            received: r.received,
+            isProjected: r.isProjected,
+          });
         }
         setForecastData([...byDate.values()].sort((a, b) => a.date > b.date ? 1 : -1));
       }
@@ -748,6 +874,11 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     fontWeight: fontWeight.semibold,
     color: colors.text,
+  },
+  categoryPct: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.medium,
+    color: colors.textMuted,
   },
   categoryBar: {
     height: 4,
