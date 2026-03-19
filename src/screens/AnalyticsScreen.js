@@ -12,10 +12,12 @@ import { colors, spacing, radius, fontSize, fontWeight } from '../utils/theme';
 import { CashForecastScreen } from './CashForecastScreen';
 import { CashBurnScreen } from './CashBurnScreen';
 import { RewardsScreen } from './RewardsScreen';
+import { InvestmentsScreen } from './InvestmentsScreen';
 
 const TABS = [
   { id: 'cash-forecast', label: 'Cash Forecast', icon: 'trending-down-outline' },
   { id: 'cash-burn', label: 'Cash Burn', icon: 'flame-outline' },
+  { id: 'investments', label: 'Investments', icon: 'trending-up-outline' },
   { id: 'rewards', label: 'Rewards', icon: 'gift-outline' },
 ];
 
@@ -29,6 +31,8 @@ export function AnalyticsScreen() {
         return <CashForecastScreen embedded />;
       case 'cash-burn':
         return <CashBurnScreen embedded />;
+      case 'investments':
+        return <InvestmentsScreen embedded />;
       case 'rewards':
         return <RewardsScreen embedded />;
       default:

@@ -177,4 +177,9 @@ export const api = {
     if (accountId) params.append('account_id', accountId);
     return `http://DeathStar:3001/api/export/transactions?${params.toString()}`;
   },
+
+  // Investments
+  getInvestmentHoldings: () => fetchAPI('/investments/holdings', {}, true),
+  getPortfolioHistory: (days = 30) =>
+    fetchWithParams('/investments/portfolio-history', { days }, true),
 };
