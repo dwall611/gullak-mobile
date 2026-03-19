@@ -1,5 +1,9 @@
-// Utility helpers for Gullak Mobile
+/**
+ * Utility helpers for Gullak Mobile
+ * Core formatting functions that match web implementation
+ */
 
+// Currency formatting functions matching web implementation
 export function formatCurrency(value) {
   if (value === null || value === undefined) return '$0.00';
   const abs = Math.abs(value);
@@ -14,6 +18,7 @@ export function formatCompact(value) {
   return `$${abs.toFixed(0)}`;
 }
 
+// Date formatting functions matching web implementation
 export function formatDate(dateStr) {
   if (!dateStr) return '';
   const date = new Date(dateStr + 'T00:00:00');
@@ -25,6 +30,9 @@ export function formatShortDate(dateStr) {
   const date = new Date(dateStr + 'T00:00:00');
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
+
+// Alias for backward compatibility
+export const formatDateShort = formatShortDate;
 
 export const CATEGORY_MAP = {
   'FOOD_AND_DRINK': 'Food & Dining',
