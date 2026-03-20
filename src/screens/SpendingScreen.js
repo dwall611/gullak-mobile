@@ -16,54 +16,77 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { api, clearCache } from '../api/client';
 import { formatCurrency } from '../utils/helpers';
-import { colors, spacing, radius, fontSize, fontWeight } from '../utils/theme';
 
 const screenWidth = Dimensions.get('window').width;
 
-// ─── Category colors (matching Gullak dashboard) ─────────────────────────────
-const CATEGORY_COLORS = [
-  '#3b82f6', // blue
-  '#10b981', // green
-  '#f59e0b', // amber
-  '#ef4444', // red
-  '#8b5cf6', // violet
-  '#ec4899', // pink
-  '#06b6d4', // cyan
-  '#f97316', // orange
-  '#84cc16', // lime
-  '#6366f1', // indigo
+// ─── Design Tokens ────────────────────────────────────────────────────────────
+const D = {
+  bg: '#0c0e10',
+  surface: '#161a1e',
+  surfaceLow: '#111416',
+  surfaceHigh: '#20262c',
+  onSurface: '#e0e6ed',
+  onSurfaceVariant: '#a6acb3',
+  primary: '#c6c6ca',
+  outline: '#42494f',
+};
+
+// ─── Category config (icon + color per category) ──────────────────────────────
+const CATEGORY_CONFIG = {
+  'Travel':          { color: '#3b82f6', icon: 'airplane-outline' },
+  'Bank Fees':       { color: '#10b981', icon: 'card-outline' },
+  'Shopping':        { color: '#f59e0b', icon: 'bag-handle-outline' },
+  'Food & Dining':   { color: '#f43f5e', icon: 'restaurant-outline' },
+  'Transportation':  { color: '#8b5cf6', icon: 'car-outline' },
+  'Cash Payment':    { color: '#ec4899', icon: 'cash-outline' },
+  'Bills & Utilities': { color: '#06b6d4', icon: 'flash-outline' },
+  'Entertainment':   { color: '#f97316', icon: 'film-outline' },
+  'Healthcare':      { color: '#84cc16', icon: 'medkit-outline' },
+  'Housing':         { color: '#6366f1', icon: 'home-outline' },
+  'Groceries':       { color: '#10b981', icon: 'cart-outline' },
+  'Personal Care':   { color: '#ec4899', icon: 'heart-outline' },
+  'Loan Payments':   { color: '#ef4444', icon: 'trending-down-outline' },
+  'Education':       { color: '#f59e0b', icon: 'school-outline' },
+  'Services':        { color: '#a78bfa', icon: 'construct-outline' },
+  'Government':      { color: '#64748b', icon: 'business-outline' },
+};
+
+const DEFAULT_CATEGORY_CONFIG = { color: '#6b7280', icon: 'ellipsis-horizontal-outline' };
+
+const CATEGORY_COLORS_FALLBACK = [
+  '#3b82f6', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6',
+  '#ec4899', '#06b6d4', '#f97316', '#84cc16', '#6366f1',
 ];
 
-// ─── Category name formatting ─────────────────────────────────────────────────
+// ─── Category name mapping ────────────────────────────────────────────────────
 const CATEGORY_MAP = {
-  'FOOD_AND_DRINK': 'Food & Dining',
-  'TRANSPORTATION': 'Transportation',
-  'GENERAL_MERCHANDISE': 'Shopping',
-  'ENTERTAINMENT': 'Entertainment',
-  'TRAVEL': 'Travel',
-  'PERSONAL_CARE': 'Personal Care',
-  'HEALTHCARE': 'Healthcare',
-  'RENT': 'Housing',
-  'HOME_IMPROVEMENT': 'Home',
-  'UTILITIES': 'Bills & Utilities',
-  'INCOME': 'Income',
-  'TRANSFER_IN': 'Transfer',
-  'TRANSFER_OUT': 'Transfer',
-  'LOAN_PAYMENTS': 'Loan Payments',
-  'BANK_FEES': 'Bank Fees',
+  'FOOD_AND_DRINK':           'Food & Dining',
+  'TRANSPORTATION':           'Transportation',
+  'GENERAL_MERCHANDISE':      'Shopping',
+  'ENTERTAINMENT':            'Entertainment',
+  'TRAVEL':                   'Travel',
+  'PERSONAL_CARE':            'Personal Care',
+  'HEALTHCARE':               'Healthcare',
+  'RENT':                     'Housing',
+  'HOME_IMPROVEMENT':         'Home',
+  'UTILITIES':                'Bills & Utilities',
+  'INCOME':                   'Income',
+  'TRANSFER_IN':              'Transfer',
+  'TRANSFER_OUT':             'Transfer',
+  'LOAN_PAYMENTS':            'Loan Payments',
+  'BANK_FEES':                'Bank Fees',
   'GOVERNMENT_AND_NON_PROFIT': 'Government',
-  'SERVICE': 'Services',
-  'GROCERIES': 'Groceries',
-  'AUTO': 'Transportation',
-  'EDUCATION': 'Education',
-  'UNCATEGORIZED': 'Uncategorized',
-  'RENT_AND_UTILITIES': 'Bills & Utilities',
+  'SERVICE':                  'Services',
+  'GROCERIES':                'Groceries',
+  'AUTO':                     'Transportation',
+  'EDUCATION':                'Education',
+  'UNCATEGORIZED':            'Uncategorized',
+  'RENT_AND_UTILITIES':       'Bills & Utilities',
 };
 
 const formatCategoryName = (rawCategory) => {
   if (!rawCategory) return 'Uncategorized';
-  if (CATEGORY_MAP[rawCategory]) return CATEGORY_MAP[rawCategory];
-  return 'Uncategorized';
+  return CATEGORY_MAP[rawCategory] || 'Uncategorized';
 };
 
 // ─── Transaction helpers ──────────────────────────────────────────────────────
@@ -85,10 +108,6 @@ function getCategory(tx) {
 
 function getCategorySpend(tx) {
   return tx.category_spend || 'Y';
-}
-
-function getAccountName(tx) {
-  return tx.account_name || 'Unknown';
 }
 
 function isLoanDisbursement(tx) {
@@ -115,7 +134,7 @@ function isExpense(tx) {
   return categorySpend === 'Y';
 }
 
-// ─── Date formatting ──────────────────────────────────────────────────────────
+// ─── Date helpers ─────────────────────────────────────────────────────────────
 function formatLocalDate(date) {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -129,10 +148,10 @@ function getDateRange(filter, selectedMonth, customFromDate, customToDate) {
   const startDate = new Date(endDate);
 
   switch (filter) {
-    case '1day': break;
+    case '1day':  break;
     case '7days': startDate.setDate(endDate.getDate() - 6); break;
-    case 'mtd': startDate.setDate(1); break;
-    case 'ytd': startDate.setMonth(0); startDate.setDate(1); break;
+    case 'mtd':   startDate.setDate(1); break;
+    case 'ytd':   startDate.setMonth(0); startDate.setDate(1); break;
     case 'month':
       if (selectedMonth) {
         const [year, month] = selectedMonth.split('-');
@@ -142,25 +161,79 @@ function getDateRange(filter, selectedMonth, customFromDate, customToDate) {
       break;
     case 'custom':
       if (customFromDate) startDate.setTime(new Date(customFromDate).getTime());
-      if (customToDate) endDate.setTime(new Date(customToDate).getTime());
+      if (customToDate)   endDate.setTime(new Date(customToDate).getTime());
       break;
     default: startDate.setDate(endDate.getDate() - 6);
   }
 
-  return {
-    start_date: formatLocalDate(startDate),
-    end_date: formatLocalDate(endDate),
-  };
+  return { start_date: formatLocalDate(startDate), end_date: formatLocalDate(endDate) };
 }
 
-const DATE_RANGE_OPTIONS = [
-  { value: '1day',  label: '1D' },
-  { value: '7days', label: '7D' },
-  { value: 'mtd',   label: 'MTD' },
-  { value: 'ytd',   label: 'YTD' },
-  { value: 'month', label: 'Month' },
-  { value: 'custom', label: 'Custom' },
-];
+function getPreviousDateRange(filter, selectedMonth, customFromDate, customToDate) {
+  const today = new Date();
+  const endDate = new Date(today);
+  const startDate = new Date(endDate);
+
+  switch (filter) {
+    case '1day':
+      endDate.setDate(endDate.getDate() - 1);
+      startDate.setDate(startDate.getDate() - 1);
+      break;
+    case '7days':
+      endDate.setDate(endDate.getDate() - 7);
+      startDate.setDate(startDate.getDate() - 13);
+      break;
+    case 'mtd':
+      endDate.setDate(0);
+      startDate.setFullYear(endDate.getFullYear(), endDate.getMonth(), 1);
+      break;
+    case 'ytd':
+      endDate.setFullYear(endDate.getFullYear() - 1, 11, 31);
+      startDate.setFullYear(endDate.getFullYear(), 0, 1);
+      break;
+    case 'custom':
+      if (customFromDate && customToDate) {
+        const from = new Date(customFromDate);
+        const to = new Date(customToDate);
+        const duration = to - from;
+        endDate.setTime(from.getTime() - 86400000);
+        startDate.setTime(endDate.getTime() - duration);
+      }
+      break;
+    default:
+      endDate.setDate(endDate.getDate() - 7);
+      startDate.setDate(startDate.getDate() - 13);
+  }
+
+  return { start_date: formatLocalDate(startDate), end_date: formatLocalDate(endDate) };
+}
+
+function formatDateRangeLabel(startDate, endDate) {
+  const opts = { month: 'short', day: 'numeric' };
+  const s = new Date(startDate + 'T00:00:00');
+  const e = new Date(endDate + 'T00:00:00');
+  if (s.toDateString() === e.toDateString()) {
+    return s.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  return `${s.toLocaleDateString('en-US', opts)} – ${e.toLocaleDateString('en-US', opts)}`;
+}
+
+function computePeakDay(transactions) {
+  const dayMap = {};
+  transactions.forEach(tx => {
+    if (isExpense(tx)) {
+      const date = tx.date;
+      if (!dayMap[date]) dayMap[date] = 0;
+      dayMap[date] += Math.abs(tx.amount);
+    }
+  });
+  let peakDate = null;
+  let peakAmount = 0;
+  Object.entries(dayMap).forEach(([date, amount]) => {
+    if (amount > peakAmount) { peakAmount = amount; peakDate = date; }
+  });
+  return { peakDate, peakAmount };
+}
 
 function getAvailableMonths() {
   const months = [];
@@ -174,100 +247,47 @@ function getAvailableMonths() {
   return months;
 }
 
-// ─── Summary Card ─────────────────────────────────────────────────────────────
-function SummaryCard({ label, value, icon, color = colors.primary, onPress }) {
-  return (
-    <TouchableOpacity style={styles.summaryCard} onPress={onPress} disabled={!onPress}>
-      <View style={styles.summaryHeader}>
-        <Ionicons name={icon} size={20} color={color} />
-        <Text style={styles.summaryLabel}>{label}</Text>
-        {onPress && <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />}
-      </View>
-      <Text style={[styles.summaryValue, { color }]}>{value}</Text>
-    </TouchableOpacity>
-  );
-}
+const DATE_PERIOD_OPTIONS = [
+  { value: '1day',   label: 'Day'    },
+  { value: '7days',  label: 'Week'   },
+  { value: 'mtd',    label: 'Month'  },
+  { value: 'ytd',    label: 'Year'   },
+  { value: 'custom', label: 'Custom' },
+];
 
-// ─── Category Item ────────────────────────────────────────────────────────────
-function CategoryItem({ category, amount, percentage, color, selected, onPress }) {
-  return (
-    <TouchableOpacity
-      style={[styles.categoryItem, selected && styles.categoryItemSelected]}
-      onPress={onPress}
-    >
-      <View style={styles.categoryItemHeader}>
-        <View style={styles.categoryItemLeft}>
-          <View style={[styles.categoryColorDot, { backgroundColor: color }]} />
-          <Text style={styles.categoryItemName}>{category}</Text>
-        </View>
-        <Text style={styles.categoryItemAmount}>{formatCurrency(amount)}</Text>
-      </View>
-      <View style={styles.categoryItemBar}>
-        <View style={[styles.categoryItemBarFill, { width: `${Math.min(percentage, 100)}%`, backgroundColor: color }]} />
-      </View>
-      <Text style={styles.categoryItemPercentage}>{percentage.toFixed(0)}%</Text>
-    </TouchableOpacity>
-  );
-}
+// ─── Detailed View Sub-Components ────────────────────────────────────────────
 
-// ─── Account Item ─────────────────────────────────────────────────────────────
-function AccountItem({ account, amount, percentage, color, onPress }) {
-  return (
-    <TouchableOpacity style={styles.categoryItem} onPress={onPress} disabled={!onPress}>
-      <View style={styles.categoryItemHeader}>
-        <View style={styles.categoryItemLeft}>
-          <View style={[styles.categoryColorDot, { backgroundColor: color }]} />
-          <Text style={styles.categoryItemName}>{account}</Text>
-        </View>
-        <View style={styles.categoryItemRight}>
-          <Text style={styles.categoryItemAmount}>{formatCurrency(amount)}</Text>
-          {onPress && <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ marginLeft: spacing.xs }} />}
-        </View>
-      </View>
-      <View style={styles.categoryItemBar}>
-        <View style={[styles.categoryItemBarFill, { width: `${Math.min(percentage, 100)}%`, backgroundColor: color }]} />
-      </View>
-      <Text style={styles.categoryItemPercentage}>{percentage.toFixed(0)}%</Text>
-    </TouchableOpacity>
-  );
-}
-
-// ─── Category Trend Item ──────────────────────────────────────────────────────
 function CategoryTrendItem({ category, months, onPress }) {
-  const monthLabels = Array.from({length: 3}, (_, i) => {
+  const monthLabels = Array.from({ length: 3 }, (_, i) => {
     const d = new Date();
     d.setMonth(d.getMonth() - 2 + i);
     return d.toLocaleDateString('en-US', { month: 'short' });
   });
-  const monthColors = ['#3b82f6', '#10b981', '#f59e0b']; // blue, green, amber
+  const monthColors = ['#3b82f6', '#10b981', '#f59e0b'];
   const maxValue = Math.max(...months, 1);
-  
-  // Calculate trend (Feb vs Jan, Mar vs Feb)
+
   const trend1 = months[0] > 0 ? ((months[1] - months[0]) / months[0]) * 100 : 0;
   const trend2 = months[1] > 0 ? ((months[2] - months[1]) / months[1]) * 100 : 0;
   const avgTrend = (trend1 + trend2) / 2;
 
   return (
-    <TouchableOpacity style={styles.trendItem} onPress={onPress} disabled={!onPress}>
+    <TouchableOpacity style={styles.trendItem} onPress={onPress} disabled={!onPress} activeOpacity={0.75}>
       <View style={styles.trendHeader}>
         <Text style={styles.trendCategory}>{category}</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           {avgTrend !== 0 && (
-            <View style={styles.trendIndicator}>
-              <Ionicons 
-                name={avgTrend > 0 ? 'trending-up' : 'trending-down'} 
-                size={14} 
-                color={avgTrend > 0 ? colors.expense : colors.income} 
+            <View style={[styles.trendIndicator, { backgroundColor: avgTrend > 0 ? 'rgba(239,68,68,0.12)' : 'rgba(16,185,129,0.12)' }]}>
+              <Ionicons
+                name={avgTrend > 0 ? 'trending-up' : 'trending-down'}
+                size={13}
+                color={avgTrend > 0 ? '#ef4444' : '#10b981'}
               />
-              <Text style={[
-                styles.trendPercentage,
-                { color: avgTrend > 0 ? colors.expense : colors.income }
-              ]}>
+              <Text style={[styles.trendPercentage, { color: avgTrend > 0 ? '#ef4444' : '#10b981' }]}>
                 {Math.abs(avgTrend).toFixed(0)}%
               </Text>
             </View>
           )}
-          {onPress && <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />}
+          {onPress && <Ionicons name="chevron-forward" size={14} color={D.onSurfaceVariant} />}
         </View>
       </View>
       <View style={styles.trendBars}>
@@ -277,13 +297,7 @@ function CategoryTrendItem({ category, months, onPress }) {
             <View key={idx} style={styles.trendColumn}>
               <Text style={styles.trendAmount}>{formatCurrency(amount)}</Text>
               <View style={styles.trendBarContainer}>
-                <View style={[
-                  styles.trendBar,
-                  { 
-                    height: `${heightPercent}%`,
-                    backgroundColor: monthColors[idx],
-                  }
-                ]} />
+                <View style={[styles.trendBar, { height: `${heightPercent}%`, backgroundColor: monthColors[idx] }]} />
               </View>
               <View style={styles.trendMonthLabel}>
                 <View style={[styles.monthColorDot, { backgroundColor: monthColors[idx] }]} />
@@ -297,15 +311,14 @@ function CategoryTrendItem({ category, months, onPress }) {
   );
 }
 
-// ─── Recurring Transaction Item ───────────────────────────────────────────────
 function RecurringItem({ item, onPress }) {
   return (
-    <TouchableOpacity style={styles.recurringItem} onPress={onPress} disabled={!onPress}>
+    <TouchableOpacity style={styles.recurringItem} onPress={onPress} disabled={!onPress} activeOpacity={0.75}>
       <View style={styles.recurringHeader}>
         <Text style={styles.recurringMerchant}>{item.merchant}</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <Text style={styles.recurringAmount}>{formatCurrency(item.avgAmount)}</Text>
-          {onPress && <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />}
+          {onPress && <Ionicons name="chevron-forward" size={14} color={D.onSurfaceVariant} />}
         </View>
       </View>
       <View style={styles.recurringMeta}>
@@ -322,138 +335,197 @@ function RecurringItem({ item, onPress }) {
   );
 }
 
-// ─── Transaction Item ─────────────────────────────────────────────────────────
-function TransactionItem({ transaction }) {
-  const category = getCategory(transaction);
-  const accountName = getAccountName(transaction);
-  const merchantName = transaction.merchant_name || transaction.name || 'Unknown';
+// ─── Category Allocation Card ─────────────────────────────────────────────────
+function CategoryCard({ category, amount, percentage, color, icon, onPress, compact }) {
+  const cardColor = color || DEFAULT_CATEGORY_CONFIG.color;
+  const cardIcon  = icon  || DEFAULT_CATEGORY_CONFIG.icon;
 
   return (
-    <View style={styles.transactionItem}>
-      <View style={styles.transactionLeft}>
-        <Text style={styles.transactionMerchant} numberOfLines={1}>
-          {merchantName}
-        </Text>
-        <Text style={styles.transactionMeta} numberOfLines={1}>
-          {category} • {accountName}
-        </Text>
+    <TouchableOpacity
+      style={[styles.categoryCard, compact && styles.categoryCardCompact]}
+      onPress={onPress}
+      activeOpacity={0.75}
+    >
+      <View style={styles.categoryCardTop}>
+        <View style={[styles.categoryIconContainer, { backgroundColor: `${cardColor}22` }]}>
+          <Ionicons name={cardIcon} size={20} color={cardColor} />
+        </View>
+        <View style={styles.categoryCardMeta}>
+          <Text style={styles.categoryCardName} numberOfLines={1}>{category}</Text>
+          <Text style={styles.categoryCardPct}>{percentage.toFixed(0)}%</Text>
+        </View>
+        <Text style={styles.categoryCardAmount}>{formatCurrency(amount)}</Text>
       </View>
-      <View style={styles.transactionRight}>
-        <Text style={[
-          styles.transactionAmount,
-          { color: transaction.amount > 0 ? colors.expense : colors.income }
-        ]}>
-          {formatCurrency(Math.abs(transaction.amount))}
-        </Text>
-        <Text style={styles.transactionDate}>{transaction.date}</Text>
+      <View style={styles.progressTrack}>
+        <View
+          style={[
+            styles.progressFill,
+            { width: `${Math.min(percentage, 100)}%`, backgroundColor: cardColor },
+          ]}
+        />
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function SpendingScreen() {
-  const insets = useSafeAreaInsets();
+  const insets     = useSafeAreaInsets();
   const navigation = useNavigation();
 
-  const [stats, setStats] = useState(null);
+  // ── State ────────────────────────────────────────────────────────────────
+  const [stats, setStats]               = useState(null);
+  const [previousTotal, setPreviousTotal] = useState(null);
   const [allTransactions, setAllTransactions] = useState([]);
   const [categoryData, setCategoryData] = useState([]);
-  const [accountData, setAccountData] = useState([]);
+  const [accountData, setAccountData]   = useState([]);
   const [categoryTrends, setCategoryTrends] = useState([]);
-  const [recurringData, setRecurringData] = useState([]);
-  const [dateRange, setDateRange] = useState('7days');
+  const [recurringData, setRecurringData]   = useState([]);
+
+  const [dateRange, setDateRange]       = useState('7days');
   const [selectedMonth, setSelectedMonth] = useState('');
   const [customFromDate, setCustomFromDate] = useState('');
-  const [customToDate, setCustomToDate] = useState('');
-  const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const [customToDate, setCustomToDate]     = useState('');
+  const [showMonthPicker, setShowMonthPicker]   = useState(false);
   const [showCustomPicker, setShowCustomPicker] = useState(false);
-  const [loading, setLoading] = useState(true);
+
+  const [loading, setLoading]     = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState(null);
-  const [viewMode, setViewMode] = useState('summary'); // summary | detailed
-  const [selectedCategory, setSelectedCategory] = useState(null);
-  
+  const [error, setError]           = useState(null);
+  const [activeTab, setActiveTab]   = useState('summary'); // 'summary' | 'detailed'
+
   const availableMonths = useMemo(() => getAvailableMonths(), []);
 
+  // ── Derived values ────────────────────────────────────────────────────────
+  const currentDateRangeLabel = useMemo(() => {
+    const { start_date, end_date } = getDateRange(dateRange, selectedMonth, customFromDate, customToDate);
+    return formatDateRangeLabel(start_date, end_date);
+  }, [dateRange, selectedMonth, customFromDate, customToDate]);
+
+  const totalSpend = stats?.summary?.expenses || 0;
+
+  const trendPct = useMemo(() => {
+    if (previousTotal == null || previousTotal <= 0) return null;
+    return ((totalSpend - previousTotal) / previousTotal) * 100;
+  }, [totalSpend, previousTotal]);
+
+  const { peakDate, peakAmount } = useMemo(
+    () => computePeakDay(allTransactions),
+    [allTransactions]
+  );
+
+  const peakDayLabel = useMemo(() => {
+    if (!peakDate) return null;
+    const d = new Date(peakDate + 'T00:00:00');
+    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  }, [peakDate]);
+
+  const getPeriodLabel = () => {
+    switch (dateRange) {
+      case '1day':  return 'yesterday';
+      case '7days': return 'last week';
+      case 'mtd':   return 'last month';
+      case 'ytd':   return 'last year';
+      default:      return 'prior period';
+    }
+  };
+
+  // Categories split: all but last 2 full-width, last 2 in grid
+  const mainCategories = useMemo(
+    () => categoryData.slice(0, Math.max(categoryData.length - 2, 0)),
+    [categoryData]
+  );
+  const gridCategories = useMemo(
+    () => categoryData.slice(Math.max(categoryData.length - 2, 0)),
+    [categoryData]
+  );
+
+  // ── Data loading ──────────────────────────────────────────────────────────
   const loadDashboard = useCallback(async () => {
     setError(null);
     try {
-      const { start_date, end_date } = getDateRange(dateRange, selectedMonth, customFromDate, customToDate);
+      const { start_date, end_date }         = getDateRange(dateRange, selectedMonth, customFromDate, customToDate);
+      const { start_date: prev_start, end_date: prev_end } = getPreviousDateRange(dateRange, selectedMonth, customFromDate, customToDate);
 
-      // Compute last-3-months range for category trends dynamically
-      const trendNow = new Date();
+      // Last-3-months range for category trends
+      const trendNow       = new Date();
       const trend3MonthsAgo = new Date(trendNow.getFullYear(), trendNow.getMonth() - 2, 1);
-      const trendStart = `${trend3MonthsAgo.getFullYear()}-${String(trend3MonthsAgo.getMonth()+1).padStart(2,'0')}-01`;
-      const trendEnd = `${trendNow.getFullYear()}-${String(trendNow.getMonth()+1).padStart(2,'0')}-${String(new Date(trendNow.getFullYear(),trendNow.getMonth()+1,0).getDate()).padStart(2,'0')}`;
+      const trendStart     = `${trend3MonthsAgo.getFullYear()}-${String(trend3MonthsAgo.getMonth() + 1).padStart(2, '0')}-01`;
+      const trendEnd       = `${trendNow.getFullYear()}-${String(trendNow.getMonth() + 1).padStart(2, '0')}-${String(new Date(trendNow.getFullYear(), trendNow.getMonth() + 1, 0).getDate()).padStart(2, '0')}`;
 
-      const [statsData, categoryTotals, accountTotals, allTx, categoryTrendsData, recurringTxData] = await Promise.all([
+      const [
+        statsData, categoryTotals, accountTotals,
+        allTx, categoryTrendsData, recurringTxData, prevStatsData,
+      ] = await Promise.all([
         api.getSummary({ start_date, end_date }),
         api.getSpendingByCategory(start_date, end_date, false),
         api.getAccountSpending(start_date, end_date),
         api.getTransactions({ start_date, end_date, sort_by: 'date', order: 'desc' }),
         api.getSpendingByCategory(trendStart, trendEnd, true),
         api.getRecurringTransactions(3),
+        api.getSummary({ start_date: prev_start, end_date: prev_end }),
       ]);
 
       setStats(statsData);
+      setPreviousTotal(prevStatsData?.summary?.expenses ?? null);
       setAllTransactions(allTx.transactions || []);
 
+      // Category data
       const categoryList = (categoryTotals.data || [])
         .map(item => ({ category: item.category_name, amount: item.total }))
         .sort((a, b) => b.amount - a.amount);
-      
       const categoryTotal = categoryList.reduce((sum, c) => sum + c.amount, 0);
       setCategoryData(
-        categoryList.map((c, idx) => ({
-          ...c,
-          percentage: categoryTotal > 0 ? (c.amount / categoryTotal) * 100 : 0,
-          color: CATEGORY_COLORS[idx % CATEGORY_COLORS.length],
-        }))
+        categoryList.map((c, idx) => {
+          const cfg = CATEGORY_CONFIG[c.category] || {};
+          return {
+            ...c,
+            percentage: categoryTotal > 0 ? (c.amount / categoryTotal) * 100 : 0,
+            color: cfg.color || CATEGORY_COLORS_FALLBACK[idx % CATEGORY_COLORS_FALLBACK.length],
+            icon:  cfg.icon  || DEFAULT_CATEGORY_CONFIG.icon,
+          };
+        })
       );
 
+      // Account data
       const accountList = (accountTotals.accountSpending || [])
         .filter(item => item.total_spending > 0)
         .map(item => ({ account: item.name, amount: item.total_spending }))
         .sort((a, b) => b.amount - a.amount);
-      
       const accountTotal = accountList.reduce((sum, a) => sum + a.amount, 0);
       setAccountData(
         accountList.map((a, idx) => ({
           ...a,
           percentage: accountTotal > 0 ? (a.amount / accountTotal) * 100 : 0,
-          color: CATEGORY_COLORS[idx % CATEGORY_COLORS.length],
+          color: CATEGORY_COLORS_FALLBACK[idx % CATEGORY_COLORS_FALLBACK.length],
         }))
       );
 
-      // Process category trends (last 3 months)
+      // Category trends
       const trendsMap = {};
       (categoryTrendsData.data || []).forEach(item => {
-        const cat = item.category_name;
+        const cat   = item.category_name;
         const month = item.date ? item.date.slice(0, 7) : '';
         if (!trendsMap[cat]) trendsMap[cat] = {};
         trendsMap[cat][month] = item.total;
       });
-
-      // Generate last 3 months dynamically
-      const now = new Date();
-      const months = Array.from({length: 3}, (_, i) => {
+      const now    = new Date();
+      const months = Array.from({ length: 3 }, (_, i) => {
         const d = new Date(now.getFullYear(), now.getMonth() - 2 + i, 1);
-        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       });
       const trendsList = Object.keys(trendsMap)
         .map(cat => {
           const values = months.map(m => trendsMap[cat][m] || 0);
-          const total = values.reduce((sum, v) => sum + v, 0);
+          const total  = values.reduce((sum, v) => sum + v, 0);
           return { category: cat, months: values, total };
         })
         .filter(t => t.total > 0)
         .sort((a, b) => b.total - a.total)
         .slice(0, 10);
-      
       setCategoryTrends(trendsList);
 
-      // Process recurring transactions
+      // Recurring
       setRecurringData((recurringTxData.data || []).slice(0, 10));
     } catch (err) {
       console.error('Error loading dashboard:', err);
@@ -464,31 +536,22 @@ export function SpendingScreen() {
     }
   }, [dateRange, selectedMonth, customFromDate, customToDate]);
 
-  useEffect(() => {
-    loadDashboard();
-  }, [loadDashboard]);
+  useEffect(() => { loadDashboard(); }, [loadDashboard]);
 
-  // Refresh data when screen is focused
   useFocusEffect(
     useCallback(() => {
-      // Clear cache and reload data every time screen is focused
-      // This ensures we always show fresh data after category updates
       clearCache();
       loadDashboard();
       return () => {};
     }, [loadDashboard])
   );
 
-  const handleRefresh = () => {
-    setRefreshing(true);
-    loadDashboard();
-  };
+  // ── Handlers ──────────────────────────────────────────────────────────────
+  const handleRefresh = () => { setRefreshing(true); loadDashboard(); };
 
   const handleDateRangeChange = (value) => {
     setDateRange(value);
-    if (value === 'month') {
-      setShowMonthPicker(true);
-    } else if (value === 'custom') {
+    if (value === 'custom') {
       setShowCustomPicker(true);
     } else {
       setSelectedMonth('');
@@ -497,48 +560,24 @@ export function SpendingScreen() {
     }
   };
 
-  const handleCategoryPress = (category) => {
-    setSelectedCategory(selectedCategory === category ? null : category);
-  };
-
-  // Navigation handlers
   const navigateToTransactions = (filters = {}) => {
-    // Include current date range in navigation params
-    const dateRangeParams = {
-      dateRange: dateRange,
-      selectedMonth: selectedMonth,
-      customFromDate: customFromDate,
-      customToDate: customToDate,
-      returnTo: 'Spending', // Track originating tab for back navigation
-    };
-    navigation.navigate('Transactions', { ...dateRangeParams, ...filters });
+    navigation.navigate('Transactions', {
+      dateRange, selectedMonth, customFromDate, customToDate,
+      returnTo: 'Spending',
+      ...filters,
+    });
   };
 
-  const handleTotalSpendPress = () => {
-    navigateToTransactions();
-  };
+  const handleTotalSpendPress = () => navigateToTransactions();
+  const handleTrendItemPress   = (category) => navigateToTransactions({ filterCategory: category });
+  const handleRecurringItemPress = (merchant) => navigateToTransactions({ filterMerchant: merchant });
 
-  const handleCategoryItemPress = (category) => {
-    navigateToTransactions({ filterCategory: category });
-  };
-
-  const handleAccountItemPress = (account) => {
-    navigateToTransactions({ filterAccount: account });
-  };
-
-  const handleRecurringItemPress = (merchant) => {
-    navigateToTransactions({ searchMerchant: merchant });
-  };
-
-  const handleTrendItemPress = (category) => {
-    navigateToTransactions({ filterCategory: category });
-  };
-
+  // ── Loading / Error ───────────────────────────────────────────────────────
   if (loading) {
     return (
       <View style={[styles.container, styles.centerContent]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={{ color: colors.textSecondary, marginTop: spacing.md, fontSize: fontSize.sm }}>Loading spending data...</Text>
+        <ActivityIndicator size="large" color={D.primary} />
+        <Text style={styles.loadingText}>Loading spending data…</Text>
       </View>
     );
   }
@@ -550,22 +589,20 @@ export function SpendingScreen() {
           <Text style={styles.headerTitle}>Spending</Text>
         </View>
         <View style={[styles.centerContent, { flex: 1 }]}>
-          <Ionicons name="alert-circle-outline" size={40} color={colors.expense} />
-          <Text style={{ color: colors.expense, marginTop: spacing.md, textAlign: 'center', paddingHorizontal: spacing.xl }}>{error}</Text>
-          <TouchableOpacity
-            style={{ backgroundColor: colors.primary, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: radius.md, marginTop: spacing.md }}
-            onPress={loadDashboard}
-          >
-            <Text style={{ color: '#fff', fontWeight: fontWeight.semibold }}>Retry</Text>
+          <Ionicons name="alert-circle-outline" size={44} color="#ef4444" />
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={loadDashboard}>
+            <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
         </View>
       </View>
     );
   }
 
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
+      {/* ── Header ────────────────────────────────────────────────────────── */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Spending</Text>
       </View>
@@ -574,115 +611,207 @@ export function SpendingScreen() {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={D.primary}
+          />
         }
+        showsVerticalScrollIndicator={false}
       >
-        {/* Date Range Chips */}
-        <View style={styles.filterRow}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
-            {DATE_RANGE_OPTIONS.map(({ value, label }) => (
+        {/* ── Period Selector ──────────────────────────────────────────────── */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.periodRow}
+          contentContainerStyle={styles.periodRowContent}
+        >
+          {DATE_PERIOD_OPTIONS.map(({ value, label }) => {
+            const isActive = dateRange === value;
+            return (
               <TouchableOpacity
                 key={value}
                 onPress={() => handleDateRangeChange(value)}
-                style={[styles.filterChip, dateRange === value && styles.filterChipActive]}
+                style={[styles.periodPill, isActive && styles.periodPillActive]}
+                activeOpacity={0.75}
               >
-                <Text style={[styles.filterChipText, dateRange === value && styles.filterChipTextActive]}>
-                  {dateRange === 'month' && selectedMonth ? 
-                    availableMonths.find(m => m.key === selectedMonth)?.label || label :
-                    dateRange === 'custom' && customFromDate ? 
-                      `${customFromDate.slice(5)} - ${customToDate.slice(5)}` :
-                      label
-                  }
+                <Text style={[styles.periodPillText, isActive && styles.periodPillTextActive]}>
+                  {label}
                 </Text>
               </TouchableOpacity>
-            ))}
-          </ScrollView>
+            );
+          })}
+        </ScrollView>
+
+        {/* ── Tab Switcher ─────────────────────────────────────────────────── */}
+        <View style={styles.tabSwitcher}>
+          {[{ key: 'summary', label: 'Summary' }, { key: 'detailed', label: 'Detailed' }].map(({ key, label }) => {
+            const isActive = activeTab === key;
+            return (
+              <TouchableOpacity
+                key={key}
+                onPress={() => setActiveTab(key)}
+                style={[styles.tabButton, isActive && styles.tabButtonActive]}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.tabButtonText, isActive && styles.tabButtonTextActive]}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
-        {/* View Mode Toggle */}
-        <View style={styles.viewToggleContainer}>
-          <TouchableOpacity
-            onPress={() => setViewMode('summary')}
-            style={[styles.viewToggleButton, viewMode === 'summary' && styles.viewToggleButtonActive]}
-          >
-            <Ionicons
-              name="grid-outline"
-              size={16}
-              color={viewMode === 'summary' ? colors.primary : colors.textMuted}
-            />
-            <Text style={[styles.viewToggleText, viewMode === 'summary' && styles.viewToggleTextActive]}>
-              Summary
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setViewMode('detailed')}
-            style={[styles.viewToggleButton, viewMode === 'detailed' && styles.viewToggleButtonActive]}
-          >
-            <Ionicons
-              name="bar-chart-outline"
-              size={16}
-              color={viewMode === 'detailed' ? colors.primary : colors.textMuted}
-            />
-            <Text style={[styles.viewToggleText, viewMode === 'detailed' && styles.viewToggleTextActive]}>
-              Detailed
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Summary Cards */}
-        {stats && stats.summary && (
-          <View style={styles.summaryCardsRow}>
-            <SummaryCard
-              label="Total Spend"
-              value={formatCurrency(stats.summary.expenses || 0)}
-              icon="cash-outline"
-              color={colors.expense}
-              onPress={handleTotalSpendPress}
-            />
-          </View>
-        )}
-
-        {/* Summary View */}
-        {viewMode === 'summary' && (
+        {/* ══════════════════ SUMMARY TAB ═══════════════════════════════════ */}
+        {activeTab === 'summary' && (
           <>
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Spending by Category</Text>
-              {categoryData.map((item) => (
-                <CategoryItem
-                  key={item.category}
-                  category={item.category}
-                  amount={item.amount}
-                  percentage={item.percentage}
-                  color={item.color}
-                  selected={selectedCategory === item.category}
-                  onPress={() => handleCategoryItemPress(item.category)}
-                />
-              ))}
+            {/* ── Hero Bento Grid ──────────────────────────────────────────── */}
+            <View style={styles.heroGrid}>
+              {/* Total Outflow card (2/3 width) */}
+              <TouchableOpacity
+                style={styles.heroOutflowCard}
+                onPress={() => navigateToTransactions()}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.outflowLabel}>TOTAL OUTFLOW</Text>
+                <Text style={styles.outflowAmount} numberOfLines={1} adjustsFontSizeToFit>
+                  {formatCurrency(totalSpend)}
+                </Text>
+                <View style={styles.outflowFooter}>
+                  {trendPct !== null && (
+                    <View style={[
+                      styles.trendBadge,
+                      { backgroundColor: trendPct > 0 ? 'rgba(239,68,68,0.18)' : 'rgba(16,185,129,0.18)' },
+                    ]}>
+                      <Ionicons
+                        name={trendPct > 0 ? 'trending-up' : 'trending-down'}
+                        size={12}
+                        color={trendPct > 0 ? '#ef4444' : '#10b981'}
+                      />
+                      <Text style={[
+                        styles.trendBadgeText,
+                        { color: trendPct > 0 ? '#ef4444' : '#10b981' },
+                      ]}>
+                        {trendPct > 0 ? '+' : ''}{trendPct.toFixed(1)}% vs {getPeriodLabel()}
+                      </Text>
+                    </View>
+                  )}
+                  <Text style={styles.outflowDateRange}>{currentDateRangeLabel}</Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Peak Day card (1/3 width) */}
+              <View style={styles.heroPeakCard}>
+                <Ionicons name="bulb-outline" size={18} color={D.onSurfaceVariant} style={{ marginBottom: 6 }} />
+                <Text style={styles.peakHeading}>Peak Day</Text>
+                {peakDate ? (
+                  <>
+                    <Text style={styles.peakDesc} numberOfLines={3}>
+                      {peakDayLabel} was your most active day
+                    </Text>
+                    <View style={styles.peakFooter}>
+                      <Text style={styles.peakAmount}>{formatCurrency(peakAmount)}</Text>
+                      <Text style={styles.peakLabel}>Daily Max</Text>
+                    </View>
+                  </>
+                ) : (
+                  <Text style={styles.peakDesc}>No data for this period</Text>
+                )}
+              </View>
             </View>
 
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Spending by Account</Text>
-              {accountData.map((item) => (
-                <AccountItem
-                  key={item.account}
-                  account={item.account}
-                  amount={item.amount}
-                  percentage={item.percentage}
-                  color={item.color}
-                  onPress={() => handleAccountItemPress(item.account)}
-                />
-              ))}
-            </View>
+            {/* ── Spending Allocation ───────────────────────────────────────── */}
+            {categoryData.length > 0 && (
+              <View style={styles.allocationSection}>
+                {/* Section header — no EXPORT DATA button */}
+                <View style={styles.allocationHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.allocationTitle}>Spending Allocation</Text>
+                    <Text style={styles.allocationSubtitle}>
+                      Detailed breakdown across {categoryData.length} {categoryData.length === 1 ? 'category' : 'categories'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Full-width category cards */}
+                {mainCategories.map(item => (
+                  <CategoryCard
+                    key={item.category}
+                    category={item.category}
+                    amount={item.amount}
+                    percentage={item.percentage}
+                    color={item.color}
+                    icon={item.icon}
+                    onPress={() => navigateToTransactions({ filterCategory: item.category })}
+                  />
+                ))}
+
+                {/* Bottom 2 in 2-column grid */}
+                {gridCategories.length > 0 && (
+                  <View style={styles.categoryGrid}>
+                    {gridCategories.map(item => (
+                      <CategoryCard
+                        key={item.category}
+                        category={item.category}
+                        amount={item.amount}
+                        percentage={item.percentage}
+                        color={item.color}
+                        icon={item.icon}
+                        onPress={() => navigateToTransactions({ filterCategory: item.category })}
+                        compact
+                      />
+                    ))}
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* ── Spending by Account ───────────────────────────────────────── */}
+            {accountData.length > 0 && (
+              <View style={styles.allocationSection}>
+                <View style={styles.allocationHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.allocationTitle}>Spending by Account</Text>
+                    <Text style={styles.allocationSubtitle}>
+                      {accountData.length} {accountData.length === 1 ? 'account' : 'accounts'} with activity
+                    </Text>
+                  </View>
+                </View>
+                {accountData.map((item) => (
+                  <View key={item.account} style={styles.accountCard}>
+                    <View style={styles.accountCardTop}>
+                      <View style={[styles.accountIconContainer, { backgroundColor: `${item.color}22` }]}>
+                        <Ionicons name="card-outline" size={18} color={item.color} />
+                      </View>
+                      <View style={styles.accountCardMeta}>
+                        <Text style={styles.accountCardName} numberOfLines={1}>{item.account}</Text>
+                        <Text style={styles.accountCardPct}>{item.percentage.toFixed(0)}% of total</Text>
+                      </View>
+                      <Text style={styles.accountCardAmount}>{formatCurrency(item.amount)}</Text>
+                    </View>
+                    <View style={styles.progressTrack}>
+                      <View
+                        style={[
+                          styles.progressFill,
+                          { width: `${Math.min(item.percentage, 100)}%`, backgroundColor: item.color },
+                        ]}
+                      />
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
           </>
         )}
 
-        {/* Detailed View */}
-        {viewMode === 'detailed' && (
+        {/* ══════════════════ DETAILED TAB ══════════════════════════════════ */}
+        {activeTab === 'detailed' && (
           <>
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Category Spending (Last 3 Months)</Text>
+            {/* ── Category Spending Trends (Last 3 Months) ─────────────────── */}
+            <View style={styles.detailedSection}>
+              <Text style={styles.detailedSectionTitle}>Category Spending (Last 3 Months)</Text>
               {categoryTrends.length > 0 ? (
-                categoryTrends.map((item) => (
+                categoryTrends.map(item => (
                   <CategoryTrendItem
                     key={item.category}
                     category={item.category}
@@ -695,12 +824,13 @@ export function SpendingScreen() {
               )}
             </View>
 
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Recurring Transactions</Text>
+            {/* ── Recurring Transactions ────────────────────────────────────── */}
+            <View style={styles.detailedSection}>
+              <Text style={styles.detailedSectionTitle}>Recurring Transactions</Text>
               {recurringData.length > 0 ? (
                 recurringData.map((item, idx) => (
-                  <RecurringItem 
-                    key={`${item.merchant}-${idx}`} 
+                  <RecurringItem
+                    key={`${item.merchant}-${idx}`}
                     item={item}
                     onPress={() => handleRecurringItemPress(item.merchant)}
                   />
@@ -711,9 +841,11 @@ export function SpendingScreen() {
             </View>
           </>
         )}
+
+        <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* Month Picker Modal */}
+      {/* ── Month Picker Modal ────────────────────────────────────────────── */}
       <Modal
         visible={showMonthPicker}
         animationType="slide"
@@ -724,18 +856,15 @@ export function SpendingScreen() {
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Select Month</Text>
             <TouchableOpacity onPress={() => setShowMonthPicker(false)}>
-              <Ionicons name="close" size={24} color={colors.text} />
+              <Ionicons name="close" size={24} color={D.onSurface} />
             </TouchableOpacity>
           </View>
           <ScrollView contentContainerStyle={styles.modalContent}>
-            {availableMonths.map((m) => (
+            {availableMonths.map(m => (
               <TouchableOpacity
                 key={m.key}
                 style={[styles.modalOption, selectedMonth === m.key && styles.modalOptionActive]}
-                onPress={() => {
-                  setSelectedMonth(m.key);
-                  setShowMonthPicker(false);
-                }}
+                onPress={() => { setSelectedMonth(m.key); setShowMonthPicker(false); }}
               >
                 <Text style={[styles.modalOptionText, selectedMonth === m.key && styles.modalOptionTextActive]}>
                   {m.label}
@@ -746,7 +875,7 @@ export function SpendingScreen() {
         </View>
       </Modal>
 
-      {/* Custom Date Picker Modal */}
+      {/* ── Custom Date Picker Modal ──────────────────────────────────────── */}
       <Modal
         visible={showCustomPicker}
         animationType="slide"
@@ -757,7 +886,7 @@ export function SpendingScreen() {
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Custom Date Range</Text>
             <TouchableOpacity onPress={() => setShowCustomPicker(false)}>
-              <Ionicons name="close" size={24} color={colors.text} />
+              <Ionicons name="close" size={24} color={D.onSurface} />
             </TouchableOpacity>
           </View>
           <View style={styles.modalContent}>
@@ -765,7 +894,7 @@ export function SpendingScreen() {
             <TextInput
               style={styles.dateInput}
               placeholder="YYYY-MM-DD"
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor={D.outline}
               value={customFromDate}
               onChangeText={setCustomFromDate}
             />
@@ -773,14 +902,11 @@ export function SpendingScreen() {
             <TextInput
               style={styles.dateInput}
               placeholder="YYYY-MM-DD"
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor={D.outline}
               value={customToDate}
               onChangeText={setCustomToDate}
             />
-            <TouchableOpacity
-              style={styles.applyButton}
-              onPress={() => setShowCustomPicker(false)}
-            >
+            <TouchableOpacity style={styles.applyButton} onPress={() => setShowCustomPicker(false)}>
               <Text style={styles.applyButtonText}>Apply</Text>
             </TouchableOpacity>
           </View>
@@ -790,293 +916,181 @@ export function SpendingScreen() {
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: D.bg,
   },
   centerContent: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  loadingText: {
+    color: D.onSurfaceVariant,
+    marginTop: 12,
+    fontSize: 14,
+  },
+  errorText: {
+    color: '#ef4444',
+    marginTop: 12,
+    textAlign: 'center',
+    paddingHorizontal: 28,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  retryButton: {
+    backgroundColor: D.surfaceHigh,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  retryButtonText: {
+    color: D.onSurface,
+    fontWeight: '700',
+    fontSize: 14,
+  },
+
+  // ── Header ──────────────────────────────────────────────────────────────
   header: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: colors.cardBorder,
+    borderBottomColor: D.outline,
   },
   headerTitle: {
-    fontSize: fontSize.xxl,
-    fontWeight: fontWeight.bold,
-    color: colors.text,
+    fontSize: 24,
+    fontWeight: '700',
+    color: D.onSurface,
+    fontFamily: 'Manrope',
   },
-  scrollView: {
+
+  // ── Scroll ──────────────────────────────────────────────────────────────
+  scrollView: { flex: 1 },
+  scrollContent: { paddingHorizontal: 14, paddingTop: 16 },
+
+  // ── Tab Switcher ─────────────────────────────────────────────────────────
+  tabSwitcher: {
+    flexDirection: 'row',
+    backgroundColor: D.surfaceLow,
+    borderRadius: 12,
+    padding: 3,
+    marginBottom: 18,
+    gap: 3,
+  },
+  tabButton: {
     flex: 1,
+    paddingVertical: 9,
+    borderRadius: 9,
+    alignItems: 'center',
   },
-  scrollContent: {
-    padding: spacing.md,
-  },
-  filterRow: {
-    marginBottom: spacing.md,
-  },
-  filterScroll: {
-    flexGrow: 0,
-  },
-  filterChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    marginRight: spacing.sm,
+  tabButtonActive: {
+    backgroundColor: D.surfaceHigh,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: D.outline,
   },
-  filterChipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+  tabButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: D.onSurfaceVariant,
+    fontFamily: 'Inter',
   },
-  filterChipText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium,
-    color: colors.textMuted,
+  tabButtonTextActive: {
+    color: D.onSurface,
+    fontWeight: '700',
+    fontFamily: 'Manrope',
   },
-  filterChipTextActive: {
-    color: '#fff',
+
+  // ── Detailed Section ─────────────────────────────────────────────────────
+  detailedSection: {
+    marginBottom: 22,
   },
-  viewToggleContainer: {
-    flexDirection: 'row',
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    padding: spacing.xs,
-    marginBottom: spacing.md,
-  },
-  viewToggleButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.sm,
-  },
-  viewToggleButtonActive: {
-    backgroundColor: colors.background,
-  },
-  viewToggleText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium,
-    color: colors.textMuted,
-  },
-  viewToggleTextActive: {
-    color: colors.primary,
-  },
-  summaryCardsRow: {
-    marginBottom: spacing.md,
-  },
-  summaryCard: {
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-  },
-  summaryHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  summaryLabel: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    fontWeight: fontWeight.medium,
-  },
-  summaryValue: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.bold,
-  },
-  section: {
-    marginBottom: spacing.lg,
-  },
-  sectionTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold,
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  categoryItem: {
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-  },
-  categoryItemSelected: {
-    borderColor: colors.primary,
-    backgroundColor: `${colors.primary}15`,
-  },
-  categoryItemHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
-  categoryItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    flex: 1,
-  },
-  categoryItemRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  categoryColorDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-  },
-  categoryItemName: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.medium,
-    color: colors.text,
-    flex: 1,
-  },
-  categoryItemAmount: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold,
-    color: colors.expense,
-  },
-  categoryItemBar: {
-    height: 4,
-    backgroundColor: colors.cardBorder,
-    borderRadius: radius.sm,
-    overflow: 'hidden',
-  },
-  categoryItemBarFill: {
-    height: '100%',
-  },
-  categoryItemPercentage: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    marginTop: spacing.xs,
-    textAlign: 'right',
-  },
-  transactionItem: {
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-  },
-  transactionLeft: {
-    flex: 1,
-    marginRight: spacing.md,
-  },
-  transactionMerchant: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.medium,
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  transactionMeta: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-  },
-  transactionRight: {
-    alignItems: 'flex-end',
-  },
-  transactionAmount: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold,
-    marginBottom: spacing.xs,
-  },
-  transactionDate: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
+  detailedSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: D.onSurface,
+    fontFamily: 'Manrope',
+    marginBottom: 12,
   },
   emptyText: {
-    fontSize: fontSize.base,
-    color: colors.textMuted,
+    fontSize: 14,
+    color: D.onSurfaceVariant,
     textAlign: 'center',
-    marginTop: spacing.lg,
+    marginTop: 16,
+    fontFamily: 'Inter',
   },
+
+  // ── Trend Item ────────────────────────────────────────────────────────────
   trendItem: {
-    backgroundColor: colors.card,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
+    backgroundColor: D.surface,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    borderColor: D.outline,
   },
   trendHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: 14,
   },
   trendCategory: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.bold,
-    color: colors.text,
+    fontSize: 14,
+    fontWeight: '700',
+    color: D.onSurface,
+    fontFamily: 'Manrope',
     flex: 1,
   },
   trendIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: colors.background,
-    paddingHorizontal: spacing.sm,
+    gap: 3,
+    paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: radius.full,
+    borderRadius: 100,
   },
   trendPercentage: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold,
+    fontSize: 11,
+    fontWeight: '700',
+    fontFamily: 'Inter',
   },
   trendBars: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    gap: spacing.md,
+    gap: 10,
   },
   trendColumn: {
     flex: 1,
     alignItems: 'center',
   },
   trendAmount: {
-    fontSize: fontSize.xs,
-    color: colors.text,
-    fontWeight: fontWeight.semibold,
-    marginBottom: spacing.sm,
+    fontSize: 10,
+    color: D.onSurface,
+    fontWeight: '700',
+    fontFamily: 'Inter',
+    marginBottom: 6,
   },
   trendBarContainer: {
     width: '100%',
-    height: 100,
-    backgroundColor: `${colors.textMuted}15`,
-    borderRadius: radius.md,
+    height: 80,
+    backgroundColor: `${D.outline}55`,
+    borderRadius: 6,
     justifyContent: 'flex-end',
     overflow: 'hidden',
   },
   trendBar: {
     width: '100%',
-    borderTopLeftRadius: radius.sm,
-    borderTopRightRadius: radius.sm,
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 4,
   },
   trendMonthLabel: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: spacing.sm,
+    gap: 3,
+    marginTop: 6,
   },
   monthColorDot: {
     width: 6,
@@ -1084,118 +1098,362 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   trendMonth: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    fontWeight: fontWeight.semibold,
+    fontSize: 10,
+    color: D.onSurfaceVariant,
+    fontWeight: '700',
+    fontFamily: 'Inter',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.4,
   },
+
+  // ── Recurring Item ────────────────────────────────────────────────────────
   recurringItem: {
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
+    backgroundColor: D.surface,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 8,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: D.outline,
   },
   recurringHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.xs,
+    marginBottom: 4,
   },
   recurringMerchant: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold,
-    color: colors.text,
+    fontSize: 14,
+    fontWeight: '700',
+    color: D.onSurface,
+    fontFamily: 'Manrope',
     flex: 1,
   },
   recurringAmount: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.bold,
-    color: colors.expense,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ef4444',
+    fontFamily: 'Manrope',
   },
   recurringMeta: {
-    marginBottom: spacing.xs,
+    marginBottom: 6,
   },
   recurringMetaText: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
+    fontSize: 12,
+    color: D.onSurfaceVariant,
+    fontFamily: 'Inter',
   },
   recurringFooter: {
     borderTopWidth: 1,
-    borderTopColor: colors.cardBorder,
-    paddingTop: spacing.xs,
-    marginTop: spacing.xs,
+    borderTopColor: D.outline,
+    paddingTop: 6,
+    marginTop: 2,
   },
   recurringFooterText: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
+    fontSize: 11,
+    color: D.onSurfaceVariant,
+    fontFamily: 'Inter',
   },
+
+  // ── Period Selector ──────────────────────────────────────────────────────
+  periodRow: { flexGrow: 0, marginBottom: 16 },
+  periodRowContent: { gap: 8, paddingRight: 4 },
+  periodPill: {
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 100,
+    backgroundColor: D.surfaceLow,
+  },
+  periodPillActive: {
+    backgroundColor: D.surfaceHigh,
+    borderWidth: 1,
+    borderColor: D.outline,
+  },
+  periodPillText: {
+    fontSize: 13,
+    color: D.onSurfaceVariant,
+  },
+  periodPillTextActive: {
+    color: D.onSurface,
+    fontWeight: '700',
+    fontFamily: 'Manrope',
+  },
+
+  // ── Hero Grid ────────────────────────────────────────────────────────────
+  heroGrid: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 22,
+  },
+  heroOutflowCard: {
+    flex: 2,
+    backgroundColor: D.surface,
+    borderRadius: 16,
+    padding: 16,
+    justifyContent: 'space-between',
+    minHeight: 160,
+  },
+  outflowLabel: {
+    fontSize: 10,
+    color: D.onSurfaceVariant,
+    letterSpacing: 1.3,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+    fontFamily: 'Inter',
+  },
+  outflowAmount: {
+    fontSize: 34,
+    fontWeight: '800',
+    color: D.onSurface,
+    fontFamily: 'Manrope',
+    marginBottom: 14,
+    letterSpacing: -0.5,
+  },
+  outflowFooter: { gap: 5 },
+  trendBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 100,
+    alignSelf: 'flex-start',
+  },
+  trendBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    fontFamily: 'Inter',
+  },
+  outflowDateRange: {
+    fontSize: 11,
+    color: D.onSurfaceVariant,
+    fontFamily: 'Inter',
+  },
+
+  heroPeakCard: {
+    flex: 1,
+    backgroundColor: D.surfaceLow,
+    borderRadius: 16,
+    padding: 14,
+    minHeight: 160,
+  },
+  peakHeading: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: D.onSurface,
+    fontFamily: 'Manrope',
+    marginBottom: 6,
+  },
+  peakDesc: {
+    fontSize: 11,
+    color: D.onSurfaceVariant,
+    fontFamily: 'Inter',
+    lineHeight: 16,
+    flex: 1,
+    marginBottom: 10,
+  },
+  peakFooter: { gap: 2 },
+  peakAmount: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: D.onSurface,
+    fontFamily: 'Manrope',
+  },
+  peakLabel: {
+    fontSize: 10,
+    color: D.onSurfaceVariant,
+    fontFamily: 'Inter',
+    letterSpacing: 0.4,
+  },
+
+  // ── Spending Allocation ──────────────────────────────────────────────────
+  allocationSection: { marginBottom: 8 },
+  allocationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 14,
+  },
+  allocationTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: D.onSurface,
+    fontFamily: 'Manrope',
+    marginBottom: 3,
+  },
+  allocationSubtitle: {
+    fontSize: 12,
+    color: D.onSurfaceVariant,
+    fontFamily: 'Inter',
+  },
+  // ── Category Card ────────────────────────────────────────────────────────
+  categoryCard: {
+    backgroundColor: D.surface,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 8,
+  },
+  categoryCardCompact: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  categoryCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 10,
+  },
+  categoryIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  categoryCardMeta: {
+    flex: 1,
+    gap: 2,
+  },
+  categoryCardName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: D.onSurface,
+    fontFamily: 'Manrope',
+  },
+  categoryCardPct: {
+    fontSize: 12,
+    color: D.onSurfaceVariant,
+    fontFamily: 'Inter',
+  },
+  categoryCardAmount: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: D.onSurface,
+    fontFamily: 'Manrope',
+  },
+  progressTrack: {
+    height: 1.5,
+    backgroundColor: D.outline,
+    borderRadius: 100,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 100,
+  },
+  categoryGrid: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+
+  // ── Modals ───────────────────────────────────────────────────────────────
   modal: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: D.bg,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: colors.cardBorder,
+    borderBottomColor: D.outline,
   },
   modalTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold,
-    color: colors.text,
+    fontSize: 18,
+    fontWeight: '700',
+    color: D.onSurface,
+    fontFamily: 'Manrope',
   },
-  modalContent: {
-    padding: spacing.md,
-  },
+  modalContent: { padding: 16 },
   modalOption: {
-    padding: spacing.md,
-    borderRadius: radius.sm,
-    marginBottom: spacing.xs,
+    padding: 14,
+    borderRadius: 8,
+    marginBottom: 4,
   },
-  modalOptionActive: {
-    backgroundColor: `${colors.primary}20`,
-  },
+  modalOptionActive: { backgroundColor: D.surfaceHigh },
   modalOptionText: {
-    fontSize: fontSize.base,
-    color: colors.textSecondary,
+    fontSize: 15,
+    color: D.onSurfaceVariant,
+    fontFamily: 'Inter',
   },
   modalOptionTextActive: {
-    color: colors.primary,
-    fontWeight: fontWeight.medium,
+    color: D.onSurface,
+    fontWeight: '600',
+    fontFamily: 'Manrope',
   },
   inputLabel: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium,
-    color: colors.textSecondary,
-    marginBottom: spacing.sm,
-    marginTop: spacing.md,
+    fontSize: 13,
+    fontWeight: '600',
+    color: D.onSurfaceVariant,
+    fontFamily: 'Inter',
+    marginBottom: 8,
+    marginTop: 14,
   },
   dateInput: {
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
+    backgroundColor: D.surface,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: fontSize.base,
-    color: colors.text,
+    borderColor: D.outline,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: D.onSurface,
+    fontFamily: 'Inter',
   },
   applyButton: {
-    backgroundColor: colors.primary,
-    borderRadius: radius.md,
-    paddingVertical: spacing.md,
+    backgroundColor: D.surfaceHigh,
+    borderRadius: 10,
+    paddingVertical: 14,
     alignItems: 'center',
-    marginTop: spacing.lg,
+    marginTop: 24,
   },
   applyButtonText: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold,
-    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+    color: D.onSurface,
+    fontFamily: 'Manrope',
+  },
+
+  // ── Account Card (Summary tab) ────────────────────────────────────────────
+  accountCard: {
+    backgroundColor: D.surface,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 8,
+  },
+  accountCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 10,
+  },
+  accountIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  accountCardMeta: {
+    flex: 1,
+    gap: 2,
+  },
+  accountCardName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: D.onSurface,
+    fontFamily: 'Manrope',
+  },
+  accountCardPct: {
+    fontSize: 12,
+    color: D.onSurfaceVariant,
+    fontFamily: 'Inter',
+  },
+  accountCardAmount: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: D.onSurface,
+    fontFamily: 'Manrope',
   },
 });

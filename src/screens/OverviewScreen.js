@@ -11,7 +11,13 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LineChart } from 'react-native-chart-kit';
+import Svg, {
+  Path,
+  Defs,
+  LinearGradient as SvgLinearGradient,
+  Stop,
+  Text as SvgText,
+} from 'react-native-svg';
 import { api } from '../api/client';
 import { formatCurrency, formatCompact, getCategoryColor } from '../utils/helpers';
 import { colors, spacing, radius, fontSize, fontWeight } from '../utils/theme';
@@ -221,71 +227,148 @@ function SpendingByCategory({ data }) {
   );
 }
 
-// ─── Balance Forecast Chart ───────────────────────────────────────────────────
+// ─── Balance Forecast Chart (SVG area chart with bezier curves) ──────────────
+const FORECAST_CHART_HEIGHT = 180;
+const FORECAST_PADDING_LEFT = 8;
+const FORECAST_PADDING_RIGHT = 8;
+const FORECAST_PADDING_TOP = 16;
+const FORECAST_PADDING_BOTTOM = 32;
+
+// Chart colors
+const FORECAST_COLORS = {
+  balanceLine: '#60a5fa',
+  paidLine: '#f87171',
+  receivedLine: '#4ade80',
+  axisLabel: '#4d7a9e',
+};
+
+function buildSmoothPath(points, chartW, chartH, minVal, maxVal) {
+  if (!points || points.length < 2) return '';
+  const range = maxVal - minVal || 1;
+  const toX = (i) => FORECAST_PADDING_LEFT + (i / (points.length - 1)) * (chartW - FORECAST_PADDING_LEFT - FORECAST_PADDING_RIGHT);
+  const toY = (v) => FORECAST_PADDING_TOP + (1 - (v - minVal) / range) * (chartH - FORECAST_PADDING_TOP - FORECAST_PADDING_BOTTOM);
+
+  let d = `M ${toX(0)} ${toY(points[0])}`;
+  for (let i = 1; i < points.length; i++) {
+    const cpX = (toX(i - 1) + toX(i)) / 2;
+    d += ` C ${cpX} ${toY(points[i - 1])}, ${cpX} ${toY(points[i])}, ${toX(i)} ${toY(points[i])}`;
+  }
+  return d;
+}
+
+function buildAreaPath(points, chartW, chartH, minVal, maxVal) {
+  const linePath = buildSmoothPath(points, chartW, chartH, minVal, maxVal);
+  if (!linePath) return '';
+  const toX = (i) => FORECAST_PADDING_LEFT + (i / (points.length - 1)) * (chartW - FORECAST_PADDING_LEFT - FORECAST_PADDING_RIGHT);
+  const baseY = FORECAST_PADDING_TOP + (chartH - FORECAST_PADDING_TOP - FORECAST_PADDING_BOTTOM);
+  return `${linePath} L ${toX(points.length - 1)} ${baseY} L ${toX(0)} ${baseY} Z`;
+}
+
 function ForecastChart({ rows, todayStr }) {
-  if (!rows || rows.length < 2) return null;
+  const chartW = screenWidth - spacing.md * 2 - spacing.md * 2;
 
-  const labels = rows.map(r => {
-    const [, m, d] = r.date.split('-');
-    return `${parseInt(m)}/${parseInt(d)}`;
-  });
+  if (!rows || rows.length < 3) {
+    return (
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Balance Forecast</Text>
+        <View style={{ height: FORECAST_CHART_HEIGHT, justifyContent: 'center', alignItems: 'center' }}>
+          <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>Loading forecast...</Text>
+        </View>
+      </View>
+    );
+  }
 
-  const balanceData = rows.map(r => r.balance ?? 0);
-  const paidData = rows.map(r => r.paid ?? 0);
-  const receivedData = rows.map(r => r.received ?? 0);
-  const todayIdx = rows.findIndex(r => r.date >= todayStr);
+  // Sample down to ~20 points for performance
+  const step = Math.max(1, Math.floor(rows.length / 20));
+  const sampled = rows.filter((_, i) => i % step === 0 || i === rows.length - 1);
 
-  const chartData = {
-    labels,
-    datasets: [
-      {
-        data: balanceData,
-        color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
-        strokeWidth: 3,
-      },
-      {
-        data: paidData,
-        color: (opacity = 1) => `rgba(239, 68, 68, ${opacity})`,
-        strokeWidth: 2.5,
-      },
-      {
-        data: receivedData,
-        color: (opacity = 1) => `rgba(16, 185, 129, ${opacity})`,
-        strokeWidth: 2.5,
-      },
-    ],
-    legend: ['Balance', 'Paid', 'Received'],
-  };
+  const balances = sampled.map((r) => r.balance ?? 0);
+  const paid = sampled.map((r) => r.paid ?? 0);
+  const received = sampled.map((r) => r.received ?? 0);
 
-  const chartConfig = {
-    backgroundGradientFrom: colors.card,
-    backgroundGradientTo: colors.card,
-    color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
-    labelColor: () => colors.textSecondary,
-    strokeWidth: 2,
-    decimalPlaces: 0,
-    propsForBackgroundLines: {
-      stroke: colors.cardBorder,
-      strokeWidth: 1,
-    },
-    formatYLabel: (v) => fmtK(parseFloat(v)),
+  const allVals = [...balances, ...paid, ...received];
+  const minVal = Math.min(...allVals);
+  const maxVal = Math.max(...allVals);
+
+  const balancePath = buildSmoothPath(balances, chartW, FORECAST_CHART_HEIGHT, minVal, maxVal);
+  const paidPath = buildSmoothPath(paid, chartW, FORECAST_CHART_HEIGHT, minVal, maxVal);
+  const receivedPath = buildSmoothPath(received, chartW, FORECAST_CHART_HEIGHT, minVal, maxVal);
+  const balanceArea = buildAreaPath(balances, chartW, FORECAST_CHART_HEIGHT, minVal, maxVal);
+  const paidArea = buildAreaPath(paid, chartW, FORECAST_CHART_HEIGHT, minVal, maxVal);
+  const receivedArea = buildAreaPath(received, chartW, FORECAST_CHART_HEIGHT, minVal, maxVal);
+
+  // X axis labels: first, quarter, middle, three-quarters, last
+  const labelIdxs = [
+    0,
+    Math.floor(sampled.length / 4),
+    Math.floor(sampled.length / 2),
+    Math.floor((3 * sampled.length) / 4),
+    sampled.length - 1,
+  ].filter((v, i, a) => a.indexOf(v) === i);
+
+  const toX = (i) =>
+    FORECAST_PADDING_LEFT + (i / (sampled.length - 1)) * (chartW - FORECAST_PADDING_LEFT - FORECAST_PADDING_RIGHT);
+
+  const fmtAxisDate = (dateStr) => {
+    const [, m, d] = (dateStr || '').split('-');
+    const mon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][parseInt(m, 10) - 1];
+    return `${mon} ${parseInt(d, 10)}`;
   };
 
   return (
     <View style={styles.card}>
       <Text style={styles.cardTitle}>Balance Forecast</Text>
-      <LineChart
-        data={chartData}
-        width={screenWidth - spacing.md * 2 - spacing.md * 2}
-        height={180}
-        chartConfig={chartConfig}
-        bezier
-        style={styles.chart}
-        withDots={false}
-        withInnerLines
-        withOuterLines={false}
-        withVerticalLines={false}
-      />
+      {/* Legend */}
+      <View style={styles.forecastLegendRow}>
+        {[
+          { color: FORECAST_COLORS.balanceLine, label: 'Balance' },
+          { color: FORECAST_COLORS.paidLine, label: 'Paid' },
+          { color: FORECAST_COLORS.receivedLine, label: 'Received' },
+        ].map((l) => (
+          <View key={l.label} style={styles.forecastLegendItem}>
+            <View style={[styles.forecastLegendDot, { backgroundColor: l.color }]} />
+            <Text style={styles.forecastLegendText}>{l.label}</Text>
+          </View>
+        ))}
+      </View>
+      {/* SVG Chart */}
+      <Svg width={chartW} height={FORECAST_CHART_HEIGHT}>
+        <Defs>
+          <SvgLinearGradient id="balanceGrad" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={FORECAST_COLORS.balanceLine} stopOpacity="0.35" />
+            <Stop offset="1" stopColor={FORECAST_COLORS.balanceLine} stopOpacity="0.03" />
+          </SvgLinearGradient>
+          <SvgLinearGradient id="paidGrad" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={FORECAST_COLORS.paidLine} stopOpacity="0.3" />
+            <Stop offset="1" stopColor={FORECAST_COLORS.paidLine} stopOpacity="0.02" />
+          </SvgLinearGradient>
+          <SvgLinearGradient id="receivedGrad" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={FORECAST_COLORS.receivedLine} stopOpacity="0.3" />
+            <Stop offset="1" stopColor={FORECAST_COLORS.receivedLine} stopOpacity="0.02" />
+          </SvgLinearGradient>
+        </Defs>
+        {/* Area fills */}
+        <Path d={receivedArea} fill="url(#receivedGrad)" />
+        <Path d={paidArea} fill="url(#paidGrad)" />
+        <Path d={balanceArea} fill="url(#balanceGrad)" />
+        {/* Lines */}
+        <Path d={receivedPath} fill="none" stroke={FORECAST_COLORS.receivedLine} strokeWidth="2" strokeLinecap="round" />
+        <Path d={paidPath} fill="none" stroke={FORECAST_COLORS.paidLine} strokeWidth="2" strokeLinecap="round" />
+        <Path d={balancePath} fill="none" stroke={FORECAST_COLORS.balanceLine} strokeWidth="2.5" strokeLinecap="round" />
+        {/* X axis labels */}
+        {labelIdxs.map((idx) => (
+          <SvgText
+            key={idx}
+            x={toX(idx)}
+            y={FORECAST_CHART_HEIGHT - 4}
+            fontSize="10"
+            fill={FORECAST_COLORS.axisLabel}
+            textAnchor="middle"
+          >
+            {fmtAxisDate(sampled[idx]?.date)}
+          </SvgText>
+        ))}
+      </Svg>
     </View>
   );
 }
@@ -858,6 +941,26 @@ const styles = StyleSheet.create({
   chart: {
     borderRadius: radius.md,
     marginHorizontal: -spacing.xs,
+  },
+  forecastLegendRow: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 10,
+    paddingLeft: 4,
+  },
+  forecastLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  forecastLegendDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+  },
+  forecastLegendText: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
   },
   categoryRow: {
     flexDirection: 'row',

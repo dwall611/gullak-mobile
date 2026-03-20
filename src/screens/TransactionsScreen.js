@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  SectionList,
   RefreshControl,
   ActivityIndicator,
   TouchableOpacity,
@@ -15,19 +15,189 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { api, clearCache } from '../api/client';
-import { TransactionItem } from '../components/TransactionItem';
+import { api } from '../api/client';
 import { TransactionEditModal } from '../components/TransactionEditModal';
 import { DateRangeSelector } from '../components/DateRangeSelector';
-import { getDateRange, getAvailableMonths, getTransactionCategory, getMerchantName, getAccountName } from '../utils/helpers';
-import { colors, spacing, radius, fontSize, fontWeight } from '../utils/theme';
+import {
+  getDateRange,
+  getAvailableMonths,
+  getTransactionCategory,
+  getMerchantName,
+  getAccountName,
+} from '../utils/helpers';
+import { colors, spacing, fontSize, fontWeight } from '../utils/theme';
 
-const PAGE_SIZE = 50;
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+const PAGE_SIZE = 100;
+
+const COL = {
+  date: 60,
+  category: 70,
+  amount: 80,
+};
+
+// Category → dot color map
+const CATEGORY_COLORS = {
+  'Food & Dining':        '#f97316',
+  'Transportation':       '#3b82f6',
+  'Shopping':             '#a855f7',
+  'Entertainment':        '#ec4899',
+  'Travel':               '#06b6d4',
+  'Personal Care':        '#f59e0b',
+  'Healthcare':           '#10b981',
+  'Housing':              '#64748b',
+  'Home':                 '#84cc16',
+  'Bills & Utilities':    '#eab308',
+  'Income':               '#3fe56c',
+  'Transfer':             '#94a3b8',
+  'Credit Card Payments': '#ef4444',
+  'Bank Fees':            '#ef4444',
+  'Government':           '#6366f1',
+  'Services':             '#14b8a6',
+  'Groceries':            '#22c55e',
+  'Education':            '#8b5cf6',
+  'Uncategorized':        '#475569',
+};
+
+function getCategoryColor(cat) {
+  return CATEGORY_COLORS[cat] || '#475569';
+}
+
+// ─── Formatters ──────────────────────────────────────────────────────────────
+
+// "MAR 20" format for date column
+function formatTableDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T00:00:00');
+  const mon = d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
+  const day = d.getDate();
+  return `${mon} ${day}`;
+}
+
+// "MARCH 20, 2026" for group separators
+function formatGroupDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T00:00:00');
+  return d
+    .toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+    .toUpperCase();
+}
+
+// Format amount: +1,234.56 or -1,234.56
+function formatAmount(amount) {
+  const abs = Math.abs(amount)
+    .toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // Plaid convention: positive = debit (expense), negative = credit (income)
+  const isIncome = amount < 0;
+  return isIncome ? `+$${abs}` : `-$${abs}`;
+}
+
+// ─── Table Row ───────────────────────────────────────────────────────────────
+
+const TableRow = React.memo(function TableRow({
+  tx,
+  rowIndex,
+  onPress,
+  selectionMode,
+  isSelected,
+  onToggleSelect,
+  onLongPress,
+}) {
+  const category = getTransactionCategory(tx);
+  const merchant = getMerchantName(tx);
+  const isIncome = tx.amount < 0;
+  const bg = rowIndex % 2 === 0 ? '#131313' : '#1c1b1b';
+
+  const handlePress = () => {
+    if (selectionMode) {
+      onToggleSelect?.(tx);
+    } else {
+      onPress?.(tx);
+    }
+  };
+
+  const handleLongPress = () => {
+    onLongPress?.(tx);
+  };
+
+  return (
+    <TouchableOpacity
+      style={[styles.row, { backgroundColor: isSelected ? '#1e2d1e' : bg }]}
+      onPress={handlePress}
+      onLongPress={handleLongPress}
+      activeOpacity={0.75}
+    >
+      {selectionMode && (
+        <View style={styles.checkCell}>
+          <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+            {isSelected && <Ionicons name="checkmark" size={10} color="#fff" />}
+          </View>
+        </View>
+      )}
+
+      {/* Date */}
+      <Text style={styles.cellDate} numberOfLines={1}>
+        {formatTableDate(tx.date)}
+      </Text>
+
+      {/* Category */}
+      <View style={styles.cellCategoryWrap}>
+        <View style={[styles.catDot, { backgroundColor: getCategoryColor(category) }]} />
+        <Text style={styles.cellCategory} numberOfLines={1}>
+          {category}
+        </Text>
+      </View>
+
+      {/* Name */}
+      <Text style={styles.cellName} numberOfLines={1}>
+        {merchant}
+      </Text>
+
+      {/* Amount */}
+      <Text
+        style={[styles.cellAmount, isIncome ? styles.amountIncome : styles.amountExpense]}
+        numberOfLines={1}
+      >
+        {formatAmount(tx.amount)}
+      </Text>
+    </TouchableOpacity>
+  );
+});
+
+// ─── Group Header ─────────────────────────────────────────────────────────────
+
+const GroupHeader = React.memo(function GroupHeader({ title }) {
+  return (
+    <View style={styles.groupHeader}>
+      <View style={styles.groupLine} />
+      <Text style={styles.groupLabel}>{title}</Text>
+      <View style={styles.groupLine} />
+    </View>
+  );
+});
+
+// ─── Sticky Table Header ──────────────────────────────────────────────────────
+
+const TableHeader = React.memo(function TableHeader({ selectionMode }) {
+  return (
+    <View style={styles.tableHeader}>
+      {selectionMode && <View style={styles.checkCell} />}
+      <Text style={[styles.thCell, { width: COL.date }]}>DATE</Text>
+      <Text style={[styles.thCell, { width: COL.category }]}>CATEGORY</Text>
+      <Text style={[styles.thCell, { flex: 1 }]}>NAME</Text>
+      <Text style={[styles.thCell, styles.thAmount]}>AMOUNT</Text>
+    </View>
+  );
+});
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export function TransactionsScreen() {
   const insets = useSafeAreaInsets();
   const route = useRoute();
   const navigation = useNavigation();
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -38,9 +208,7 @@ export function TransactionsScreen() {
   const [customToDate, setCustomToDate] = useState('');
   const availableMonths = useMemo(() => getAvailableMonths(), []);
 
-  // Track originating tab for back navigation
   const [returnTo, setReturnTo] = useState(null);
-
   const [allTransactions, setAllTransactions] = useState([]);
   const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
 
@@ -54,7 +222,7 @@ export function TransactionsScreen() {
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
 
-  // Multi-select mode
+  // Multi-select
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
@@ -64,33 +232,14 @@ export function TransactionsScreen() {
   // Apply navigation params on mount
   useEffect(() => {
     if (route.params) {
-      // Apply date range params from SpendingScreen
-      if (route.params.dateRange) {
-        setDateRange(route.params.dateRange);
-      }
-      if (route.params.selectedMonth) {
-        setSelectedMonth(route.params.selectedMonth);
-      }
-      if (route.params.customFromDate) {
-        setCustomFromDate(route.params.customFromDate);
-      }
-      if (route.params.customToDate) {
-        setCustomToDate(route.params.customToDate);
-      }
-      // Apply filter params
-      if (route.params.filterCategory) {
-        setFilterCategory(route.params.filterCategory);
-      }
-      if (route.params.filterAccount) {
-        setFilterAccount(route.params.filterAccount);
-      }
-      if (route.params.searchMerchant) {
-        setSearch(route.params.searchMerchant);
-      }
-      // Track originating tab for back navigation
-      if (route.params.returnTo) {
-        setReturnTo(route.params.returnTo);
-      }
+      if (route.params.dateRange) setDateRange(route.params.dateRange);
+      if (route.params.selectedMonth) setSelectedMonth(route.params.selectedMonth);
+      if (route.params.customFromDate) setCustomFromDate(route.params.customFromDate);
+      if (route.params.customToDate) setCustomToDate(route.params.customToDate);
+      if (route.params.filterCategory) setFilterCategory(route.params.filterCategory);
+      if (route.params.filterAccount) setFilterAccount(route.params.filterAccount);
+      if (route.params.searchMerchant) setSearch(route.params.searchMerchant);
+      if (route.params.returnTo) setReturnTo(route.params.returnTo);
     }
   }, [route.params]);
 
@@ -102,7 +251,6 @@ export function TransactionsScreen() {
         customFromDate,
         customToDate
       );
-
       const data = await api.getTransactions({
         start_date,
         end_date,
@@ -128,7 +276,7 @@ export function TransactionsScreen() {
     setRefreshing(false);
   }, [loadTransactions]);
 
-  // Build unique filter options
+  // Filter options
   const accounts = useMemo(() => {
     const set = new Set(allTransactions.map((t) => getAccountName(t)));
     return [...set].filter(Boolean).sort();
@@ -161,6 +309,32 @@ export function TransactionsScreen() {
 
   const displayed = useMemo(() => filtered.slice(0, displayCount), [filtered, displayCount]);
 
+  // Group displayed by date for SectionList
+  const sections = useMemo(() => {
+    const map = new Map();
+    displayed.forEach((tx) => {
+      const key = tx.date || 'unknown';
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(tx);
+    });
+    return [...map.entries()].map(([date, data]) => ({
+      date,
+      title: formatGroupDate(date),
+      data,
+    }));
+  }, [displayed]);
+
+  // Global row index for alternating colors (per-section index won't work across sections)
+  const rowIndexMap = useMemo(() => {
+    const map = new Map();
+    let i = 0;
+    displayed.forEach((tx) => {
+      map.set(tx.id || `${tx.date}-${tx.amount}-${i}`, i);
+      i++;
+    });
+    return map;
+  }, [displayed]);
+
   const handleLoadMore = () => {
     if (displayCount < filtered.length && !loadingMore) {
       setLoadingMore(true);
@@ -178,17 +352,15 @@ export function TransactionsScreen() {
     setShowFilters(false);
   };
 
-  // Handle back navigation to originating tab
   const handleBackToOrigin = useCallback(() => {
     if (returnTo) {
-      setReturnTo(null); // Clear return state
+      setReturnTo(null);
       navigation.navigate(returnTo);
     }
   }, [returnTo, navigation]);
 
-  // Clear returnTo when user explicitly changes date range (they're "committed" to Transactions view)
   const handleDateRangeChange = useCallback((v) => {
-    setReturnTo(null); // User is modifying filters, remove back button
+    setReturnTo(null);
     setDateRange(v);
     setSelectedMonth('');
     if (v !== 'custom') {
@@ -213,11 +385,8 @@ export function TransactionsScreen() {
   const toggleSelect = useCallback((tx) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(tx.id)) {
-        next.delete(tx.id);
-      } else {
-        next.add(tx.id);
-      }
+      if (next.has(tx.id)) next.delete(tx.id);
+      else next.add(tx.id);
       return next;
     });
   }, []);
@@ -226,11 +395,8 @@ export function TransactionsScreen() {
     setSelectedIds(new Set(filtered.map((t) => t.id)));
   }, [filtered]);
 
-  const deselectAll = useCallback(() => {
-    setSelectedIds(new Set());
-  }, []);
+  const deselectAll = useCallback(() => setSelectedIds(new Set()), []);
 
-  // Load categories for picker
   const loadCategories = useCallback(async () => {
     try {
       const data = await api.getCategories();
@@ -240,29 +406,18 @@ export function TransactionsScreen() {
     }
   }, []);
 
-  // Open category picker
   const openCategoryPicker = useCallback(() => {
-    if (allCategories.length === 0) {
-      loadCategories();
-    }
+    if (allCategories.length === 0) loadCategories();
     setShowCategoryPicker(true);
   }, [allCategories.length, loadCategories]);
 
-  // Bulk update category
   const handleBulkCategoryUpdate = useCallback(async (category) => {
     if (selectedIds.size === 0) return;
-
     setBulkUpdating(true);
     try {
-      await api.bulkUpdateTransactionCategory(
-        [...selectedIds],
-        category.name,
-        category.id
-      );
+      await api.bulkUpdateTransactionCategory([...selectedIds], category.name, category.id);
       setShowCategoryPicker(false);
       exitSelectionMode();
-      // Cache clearing is now handled in the API client after successful update
-      // Refresh transactions to show updated categories
       await loadTransactions();
     } catch (err) {
       console.error('Error updating categories:', err);
@@ -272,16 +427,12 @@ export function TransactionsScreen() {
     }
   }, [selectedIds, exitSelectionMode, loadTransactions]);
 
-  // Exit selection mode when navigating away
   useEffect(() => {
     return () => {
-      if (selectionMode) {
-        exitSelectionMode();
-      }
+      if (selectionMode) exitSelectionMode();
     };
   }, [selectionMode, exitSelectionMode]);
 
-  // Transaction press handlers
   const handleTransactionPress = useCallback((tx) => {
     setSelectedTransaction(tx);
     setEditModalVisible(true);
@@ -298,35 +449,43 @@ export function TransactionsScreen() {
     await loadTransactions();
   }, [loadTransactions]);
 
-  const renderItem = ({ item }) => (
-    <TransactionItem
-      transaction={item}
-      onPress={handleTransactionPress}
-      selectionMode={selectionMode}
-      isSelected={selectedIds.has(item.id)}
-      onToggleSelect={toggleSelect}
-      onLongPress={enterSelectionMode}
-    />
+  const keyExtractor = (item) =>
+    item.id || `${item.date}-${item.amount}-${Math.random()}`;
+
+  const renderItem = ({ item, index }) => {
+    const globalIdx = rowIndexMap.get(item.id) ?? index;
+    return (
+      <TableRow
+        tx={item}
+        rowIndex={globalIdx}
+        onPress={handleTransactionPress}
+        selectionMode={selectionMode}
+        isSelected={selectedIds.has(item.id)}
+        onToggleSelect={toggleSelect}
+        onLongPress={enterSelectionMode}
+      />
+    );
+  };
+
+  const renderSectionHeader = ({ section }) => (
+    <GroupHeader title={section.title} />
   );
-  const keyExtractor = (item) => item.id || `${item.date}-${item.amount}-${Math.random()}`;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
+      {/* ── Top Header ── */}
       <View style={styles.header}>
         {selectionMode ? (
           <>
-            <TouchableOpacity onPress={exitSelectionMode} style={styles.cancelBtn}>
-              <Text style={styles.cancelBtnText}>Cancel</Text>
+            <TouchableOpacity onPress={exitSelectionMode} style={styles.headerBtn}>
+              <Text style={styles.headerBtnText}>Cancel</Text>
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>
-              {selectedIds.size} selected
-            </Text>
+            <Text style={styles.headerTitle}>{selectedIds.size} selected</Text>
             <TouchableOpacity
               onPress={selectedIds.size === filtered.length ? deselectAll : selectAll}
-              style={styles.selectAllBtn}
+              style={styles.headerBtn}
             >
-              <Text style={styles.selectAllBtnText}>
+              <Text style={styles.headerBtnText}>
                 {selectedIds.size === filtered.length ? 'Deselect All' : 'Select All'}
               </Text>
             </TouchableOpacity>
@@ -334,31 +493,31 @@ export function TransactionsScreen() {
         ) : returnTo ? (
           <>
             <TouchableOpacity onPress={handleBackToOrigin} style={styles.backBtn}>
-              <Ionicons name="chevron-back" size={24} color={colors.primary} />
+              <Ionicons name="chevron-back" size={20} color={colors.primary} />
               <Text style={styles.backBtnText}>{returnTo}</Text>
             </TouchableOpacity>
             <Text style={styles.count}>
-              {filtered.length.toLocaleString()} of {allTransactions.length.toLocaleString()}
+              {filtered.length.toLocaleString()} / {allTransactions.length.toLocaleString()}
             </Text>
           </>
         ) : (
           <>
             <Text style={styles.headerTitle}>Transactions</Text>
             <Text style={styles.count}>
-              {filtered.length.toLocaleString()} of {allTransactions.length.toLocaleString()}
+              {filtered.length.toLocaleString()} / {allTransactions.length.toLocaleString()}
             </Text>
           </>
         )}
       </View>
 
-      {/* Date range */}
+      {/* ── Date Range ── */}
       <DateRangeSelector
         selected={selectedMonth ? 'month' : dateRange}
         onSelect={handleDateRangeChange}
         months={availableMonths.slice(0, 6)}
         selectedMonth={selectedMonth}
         onSelectMonth={(m) => {
-          setReturnTo(null); // User is modifying filters, remove back button
+          setReturnTo(null);
           setSelectedMonth(m === selectedMonth ? '' : m);
           if (m !== selectedMonth) setDateRange('month');
         }}
@@ -366,13 +525,13 @@ export function TransactionsScreen() {
         customToDate={customToDate}
       />
 
-      {/* Search & filter bar */}
+      {/* ── Search & Filter Bar ── */}
       <View style={styles.searchRow}>
         <View style={styles.searchBox}>
-          <Ionicons name="search-outline" size={16} color={colors.textMuted} />
+          <Ionicons name="search-outline" size={15} color={colors.textMuted} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search merchants..."
+            placeholder="Search..."
             placeholderTextColor={colors.textMuted}
             value={search}
             onChangeText={setSearch}
@@ -380,7 +539,7 @@ export function TransactionsScreen() {
           />
           {search ? (
             <TouchableOpacity onPress={() => setSearch('')}>
-              <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+              <Ionicons name="close-circle" size={15} color={colors.textMuted} />
             </TouchableOpacity>
           ) : null}
         </View>
@@ -391,7 +550,7 @@ export function TransactionsScreen() {
         >
           <Ionicons
             name="options-outline"
-            size={18}
+            size={17}
             color={activeFilterCount > 0 ? '#fff' : colors.textSecondary}
           />
           {activeFilterCount > 0 && (
@@ -402,65 +561,74 @@ export function TransactionsScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Active filter chips */}
+      {/* ── Active Filter Chips ── */}
       {(filterAccount || filterCategory) ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.activeFilters}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.activeFilters}
+          contentContainerStyle={{ paddingHorizontal: spacing.md, gap: 6 }}
+        >
           {filterAccount ? (
-            <TouchableOpacity
-              style={styles.activeChip}
-              onPress={() => setFilterAccount('')}
-            >
+            <TouchableOpacity style={styles.activeChip} onPress={() => setFilterAccount('')}>
               <Text style={styles.activeChipText}>{filterAccount}</Text>
-              <Ionicons name="close" size={12} color={colors.primary} />
+              <Ionicons name="close" size={11} color={colors.primary} />
             </TouchableOpacity>
           ) : null}
           {filterCategory ? (
-            <TouchableOpacity
-              style={styles.activeChip}
-              onPress={() => setFilterCategory('')}
-            >
+            <TouchableOpacity style={styles.activeChip} onPress={() => setFilterCategory('')}>
               <Text style={styles.activeChipText}>{filterCategory}</Text>
-              <Ionicons name="close" size={12} color={colors.primary} />
+              <Ionicons name="close" size={11} color={colors.primary} />
             </TouchableOpacity>
           ) : null}
         </ScrollView>
       ) : null}
 
+      {/* ── Sticky Table Header ── */}
+      {!loading && <TableHeader selectionMode={selectionMode} />}
+
+      {/* ── Body ── */}
       {loading ? (
-        <View style={styles.loading}>
+        <View style={styles.loadingWrap}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading transactions...</Text>
         </View>
       ) : (
-        <FlatList
-          data={displayed}
-          renderItem={renderItem}
+        <SectionList
+          sections={sections}
           keyExtractor={keyExtractor}
+          renderItem={renderItem}
+          renderSectionHeader={renderSectionHeader}
+          stickySectionHeadersEnabled={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
+            />
           }
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.3}
           ListFooterComponent={() =>
             loadingMore ? (
-              <ActivityIndicator style={{ padding: spacing.md }} color={colors.primary} />
+              <ActivityIndicator style={{ padding: 12 }} color={colors.primary} />
             ) : displayed.length < filtered.length ? (
-              <View style={[styles.moreHint, selectionMode && styles.moreHintWithBottomBar]}>
-                <Text style={styles.moreHintText}>
-                  Showing {displayed.length} of {filtered.length} — scroll for more
+              <View style={[styles.footerHint, selectionMode && { paddingBottom: 80 }]}>
+                <Text style={styles.footerHintText}>
+                  Showing {displayed.length.toLocaleString()} of {filtered.length.toLocaleString()} — scroll for more
                 </Text>
               </View>
             ) : filtered.length > 0 ? (
-              <View style={[styles.moreHint, selectionMode && styles.moreHintWithBottomBar]}>
-                <Text style={styles.moreHintText}>
-                  {filtered.length} transactions
+              <View style={[styles.footerHint, selectionMode && { paddingBottom: 80 }]}>
+                <Text style={styles.footerHintText}>
+                  {filtered.length.toLocaleString()} transactions
                 </Text>
               </View>
             ) : null
           }
           ListEmptyComponent={() => (
             <View style={styles.empty}>
-              <Ionicons name="receipt-outline" size={48} color={colors.textMuted} />
+              <Ionicons name="receipt-outline" size={44} color={colors.textMuted} />
               <Text style={styles.emptyTitle}>No transactions</Text>
               <Text style={styles.emptyDesc}>
                 {search || activeFilterCount > 0
@@ -474,15 +642,12 @@ export function TransactionsScreen() {
               )}
             </View>
           )}
-          contentContainerStyle={[
-            displayed.length === 0 ? { flex: 1 } : null,
-            selectionMode && { paddingBottom: 80 },
-          ]}
+          contentContainerStyle={displayed.length === 0 ? { flex: 1 } : undefined}
           style={styles.list}
         />
       )}
 
-      {/* Filter modal */}
+      {/* ── Filter Modal ── */}
       <Modal
         visible={showFilters}
         animationType="slide"
@@ -493,12 +658,11 @@ export function TransactionsScreen() {
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Filter Transactions</Text>
             <TouchableOpacity onPress={() => setShowFilters(false)}>
-              <Ionicons name="close" size={24} color={colors.text} />
+              <Ionicons name="close" size={22} color={colors.text} />
             </TouchableOpacity>
           </View>
 
           <ScrollView contentContainerStyle={styles.modalContent}>
-            {/* Account filter */}
             <Text style={styles.filterLabel}>Account</Text>
             <TouchableOpacity
               style={[styles.filterOption, !filterAccount && styles.filterOptionActive]}
@@ -522,7 +686,6 @@ export function TransactionsScreen() {
 
             <View style={styles.filterDivider} />
 
-            {/* Category filter */}
             <Text style={styles.filterLabel}>Category</Text>
             <TouchableOpacity
               style={[styles.filterOption, !filterCategory && styles.filterOptionActive]}
@@ -549,10 +712,7 @@ export function TransactionsScreen() {
             <TouchableOpacity style={styles.clearFiltersBtn} onPress={clearFilters}>
               <Text style={styles.clearFiltersBtnText}>Clear All</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.applyBtn}
-              onPress={() => setShowFilters(false)}
-            >
+            <TouchableOpacity style={styles.applyBtn} onPress={() => setShowFilters(false)}>
               <Text style={styles.applyBtnText}>
                 Show {filtered.length.toLocaleString()} Results
               </Text>
@@ -561,7 +721,7 @@ export function TransactionsScreen() {
         </View>
       </Modal>
 
-      {/* Transaction Edit Modal */}
+      {/* ── Transaction Edit Modal ── */}
       <TransactionEditModal
         visible={editModalVisible}
         transaction={selectedTransaction}
@@ -569,14 +729,10 @@ export function TransactionsScreen() {
         onSaved={handleEditModalSaved}
       />
 
-      {/* Bottom action bar for multi-select */}
+      {/* ── Multi-select Bottom Bar ── */}
       {selectionMode && (
         <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing.sm }]}>
-          <TouchableOpacity
-            style={styles.clearSelectionBtn}
-            onPress={deselectAll}
-            disabled={selectedIds.size === 0}
-          >
+          <TouchableOpacity style={styles.clearSelectionBtn} onPress={deselectAll} disabled={selectedIds.size === 0}>
             <Text style={[styles.clearSelectionBtnText, selectedIds.size === 0 && styles.btnDisabled]}>
               Clear
             </Text>
@@ -585,28 +741,28 @@ export function TransactionsScreen() {
             {selectedIds.size} transaction{selectedIds.size !== 1 ? 's' : ''} selected
           </Text>
           <TouchableOpacity
-            style={[styles.setCategoryBtn, selectedIds.size === 0 && styles.btnDisabled]}
+            style={[styles.setCategoryBtn, selectedIds.size === 0 && styles.setCategoryBtnDisabled]}
             onPress={openCategoryPicker}
             disabled={selectedIds.size === 0}
           >
-            <Ionicons name="folder-outline" size={16} color="#fff" />
+            <Ionicons name="folder-outline" size={15} color="#fff" />
             <Text style={styles.setCategoryBtnText}>Set Category</Text>
           </TouchableOpacity>
         </View>
       )}
 
-      {/* Category Picker Modal */}
+      {/* ── Category Picker Modal ── */}
       <Modal
         visible={showCategoryPicker}
         animationType="slide"
         presentationStyle="pageSheet"
         onRequestClose={() => setShowCategoryPicker(false)}
       >
-        <View style={[styles.categoryModal, { paddingTop: insets.top }]}>
+        <View style={[styles.modal, { paddingTop: insets.top }]}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Select Category</Text>
             <TouchableOpacity onPress={() => setShowCategoryPicker(false)}>
-              <Ionicons name="close" size={24} color={colors.text} />
+              <Ionicons name="close" size={22} color={colors.text} />
             </TouchableOpacity>
           </View>
 
@@ -615,7 +771,7 @@ export function TransactionsScreen() {
           </Text>
 
           {bulkUpdating ? (
-            <View style={styles.loadingContainer}>
+            <View style={styles.loadingWrap}>
               <ActivityIndicator size="large" color={colors.primary} />
               <Text style={styles.loadingText}>Updating...</Text>
             </View>
@@ -628,7 +784,9 @@ export function TransactionsScreen() {
                   onPress={() => handleBulkCategoryUpdate(cat)}
                   activeOpacity={0.7}
                 >
-                  <View style={[styles.categoryDot, { backgroundColor: cat.color || colors.primary }]} />
+                  <View
+                    style={[styles.categoryDot, { backgroundColor: cat.color || getCategoryColor(cat.name) }]}
+                  />
                   <Text style={styles.categoryChipText}>{cat.name}</Text>
                 </TouchableOpacity>
               ))}
@@ -640,18 +798,22 @@ export function TransactionsScreen() {
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#0d0d0d',
   },
+
+  // ── Header ──
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'baseline',
+    alignItems: 'center',
     paddingHorizontal: spacing.md,
     paddingTop: spacing.xs,
-    paddingBottom: 0,
+    paddingBottom: 2,
   },
   headerTitle: {
     fontSize: fontSize.xl,
@@ -659,27 +821,48 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   count: {
-    fontSize: fontSize.sm,
+    fontSize: fontSize.xs,
     color: colors.textMuted,
   },
+  headerBtn: {
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
+  headerBtnText: {
+    color: colors.primary,
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+  },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backBtnText: {
+    color: colors.primary,
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.medium,
+    marginLeft: 2,
+  },
+
+  // ── Search ──
   searchRow: {
     flexDirection: 'row',
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.sm,
-    gap: spacing.sm,
+    paddingTop: 6,
+    paddingBottom: 6,
+    gap: 8,
   },
   searchBox: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 8,
-    gap: spacing.xs,
+    borderColor: '#2a2a2a',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    gap: 6,
   },
   searchInput: {
     flex: 1,
@@ -688,12 +871,12 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   filterBtn: {
-    width: 40,
-    height: 40,
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
+    width: 38,
+    height: 38,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: '#2a2a2a',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -705,10 +888,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -4,
     right: -4,
-    width: 16,
-    height: 16,
+    width: 15,
+    height: 15,
     borderRadius: 8,
-    backgroundColor: colors.expense,
+    backgroundColor: '#ef4444',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -718,55 +901,161 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   activeFilters: {
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
-    maxHeight: 32,
-  },
-  activeFiltersContent: {
-    alignItems: 'center',
-    gap: spacing.xs,
+    maxHeight: 30,
+    marginBottom: 4,
   },
   activeChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: `${colors.primary}20`,
-    borderRadius: radius.full,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
+    backgroundColor: `${colors.primary}22`,
+    borderRadius: 100,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
     gap: 4,
     borderWidth: 1,
-    borderColor: `${colors.primary}40`,
-    maxWidth: 150,
+    borderColor: `${colors.primary}44`,
   },
   activeChipText: {
     fontSize: fontSize.xs,
     color: colors.primary,
     fontWeight: fontWeight.medium,
+  },
+
+  // ── Table Header ──
+  tableHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#222',
+    backgroundColor: '#0d0d0d',
+  },
+  thCell: {
+    fontSize: 11,
+    fontWeight: fontWeight.semibold,
+    color: '#4a4a4a',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  thAmount: {
+    width: COL.amount,
+    textAlign: 'right',
+  },
+
+  // ── Table Row ──
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 44,
+    paddingHorizontal: spacing.md,
+  },
+  checkCell: {
+    width: 28,
+    alignItems: 'center',
+  },
+  checkbox: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: '#444',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  cellDate: {
+    width: COL.date,
+    fontSize: 13,
+    color: '#5a5a5a',
+    fontVariant: ['tabular-nums'],
+  },
+  cellCategoryWrap: {
+    width: COL.category,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingRight: 4,
+  },
+  catDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    flexShrink: 0,
+  },
+  cellCategory: {
+    fontSize: 11,
+    color: '#4a4a4a',
     flexShrink: 1,
   },
+  cellName: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: fontWeight.semibold,
+    color: '#e5e2e1',
+    paddingRight: 8,
+  },
+  cellAmount: {
+    width: COL.amount,
+    fontSize: 13,
+    fontWeight: fontWeight.semibold,
+    textAlign: 'right',
+    fontVariant: ['tabular-nums'],
+  },
+  amountIncome: {
+    color: '#3fe56c',
+  },
+  amountExpense: {
+    color: '#e5e2e1',
+  },
+
+  // ── Group Header ──
+  groupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingTop: 12,
+    paddingBottom: 4,
+    gap: 8,
+    backgroundColor: '#0d0d0d',
+  },
+  groupLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#222',
+  },
+  groupLabel: {
+    fontSize: 10,
+    fontWeight: fontWeight.semibold,
+    color: '#3fe56c',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+
+  // ── Misc ──
   list: {
     flex: 1,
   },
-  loading: {
+  loadingWrap: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: spacing.sm,
   },
   loadingText: {
     color: colors.textSecondary,
     fontSize: fontSize.sm,
   },
-  moreHint: {
-    padding: spacing.md,
+  footerHint: {
+    paddingVertical: 14,
     alignItems: 'center',
   },
-  moreHintWithBottomBar: {
-    paddingBottom: spacing.xxl,
-  },
-  moreHintText: {
-    color: colors.textMuted,
-    fontSize: fontSize.xs,
+  footerHintText: {
+    color: '#3a3a3a',
+    fontSize: 11,
   },
   empty: {
     flex: 1,
@@ -790,20 +1079,21 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: '#2a2a2a',
   },
   clearBtnText: {
     color: colors.text,
     fontSize: fontSize.sm,
     fontWeight: fontWeight.medium,
   },
-  // Modal
+
+  // ── Filter Modal ──
   modal: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#0d0d0d',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -812,7 +1102,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.cardBorder,
+    borderBottomColor: '#1e1e1e',
   },
   modalTitle: {
     fontSize: fontSize.lg,
@@ -823,21 +1113,21 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   filterLabel: {
-    fontSize: fontSize.sm,
+    fontSize: fontSize.xs,
     fontWeight: fontWeight.semibold,
-    color: colors.textSecondary,
+    color: colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: spacing.sm,
+    letterSpacing: 0.6,
+    marginBottom: 6,
     marginTop: spacing.sm,
   },
   filterOption: {
     padding: spacing.sm,
-    borderRadius: radius.sm,
-    marginBottom: 4,
+    borderRadius: 6,
+    marginBottom: 3,
   },
   filterOptionActive: {
-    backgroundColor: `${colors.primary}20`,
+    backgroundColor: `${colors.primary}22`,
   },
   filterOptionText: {
     fontSize: fontSize.sm,
@@ -849,23 +1139,23 @@ const styles = StyleSheet.create({
   },
   filterDivider: {
     height: 1,
-    backgroundColor: colors.cardBorder,
+    backgroundColor: '#1e1e1e',
     marginVertical: spacing.md,
   },
   modalFooter: {
     flexDirection: 'row',
     padding: spacing.md,
-    gap: spacing.sm,
+    gap: 8,
     borderTopWidth: 1,
-    borderTopColor: colors.cardBorder,
+    borderTopColor: '#1e1e1e',
   },
   clearFiltersBtn: {
     flex: 1,
     paddingVertical: spacing.sm,
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: '#2a2a2a',
     alignItems: 'center',
   },
   clearFiltersBtnText: {
@@ -877,7 +1167,7 @@ const styles = StyleSheet.create({
     flex: 2,
     paddingVertical: spacing.sm,
     backgroundColor: colors.primary,
-    borderRadius: radius.md,
+    borderRadius: 8,
     alignItems: 'center',
   },
   applyBtnText: {
@@ -885,37 +1175,8 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     fontWeight: fontWeight.semibold,
   },
-  // Selection mode header
-  cancelBtn: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  cancelBtnText: {
-    color: colors.primary,
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium,
-  },
-  selectAllBtn: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  selectAllBtnText: {
-    color: colors.primary,
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium,
-  },
-  // Back button for return navigation
-  backBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  backBtnText: {
-    color: colors.primary,
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.medium,
-    marginLeft: 2,
-  },
-  // Bottom action bar
+
+  // ── Bottom Bar (multi-select) ──
   bottomBar: {
     position: 'absolute',
     bottom: 0,
@@ -926,13 +1187,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
-    backgroundColor: colors.card,
+    backgroundColor: '#131313',
     borderTopWidth: 1,
-    borderTopColor: colors.cardBorder,
+    borderTopColor: '#222',
   },
   clearSelectionBtn: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
   },
   clearSelectionBtnText: {
     color: colors.textSecondary,
@@ -950,8 +1211,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radius.md,
-    gap: spacing.xs,
+    borderRadius: 8,
+    gap: 5,
+  },
+  setCategoryBtnDisabled: {
+    opacity: 0.4,
   },
   setCategoryBtnText: {
     color: '#fff',
@@ -959,45 +1223,36 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold,
   },
   btnDisabled: {
-    opacity: 0.5,
+    opacity: 0.4,
   },
-  // Category picker modal
-  categoryModal: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
+
+  // ── Category Picker ──
   categorySubtitle: {
     fontSize: fontSize.sm,
     color: colors.textMuted,
     textAlign: 'center',
-    paddingBottom: spacing.md,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: spacing.md,
+    paddingVertical: spacing.sm,
   },
   categoryList: {
     padding: spacing.md,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+    gap: 8,
   },
   categoryChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.card,
+    backgroundColor: '#1a1a1a',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radius.full,
+    borderRadius: 100,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
-    gap: spacing.xs,
+    borderColor: '#2a2a2a',
+    gap: 7,
   },
   categoryDot: {
-    width: 10,
-    height: 10,
+    width: 9,
+    height: 9,
     borderRadius: 5,
   },
   categoryChipText: {
