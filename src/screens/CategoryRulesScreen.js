@@ -340,7 +340,7 @@ function RuleModal({ visible, rule, categories, accounts, onSave, onClose, isNew
 }
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
-export function CategoryRulesScreen() {
+export function CategoryRulesScreen({ embedded = false }) {
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -457,9 +457,9 @@ export function CategoryRulesScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, embedded ? {} : { paddingTop: insets.top }]}>
       {/* Header */}
-      <View style={styles.header}>
+      {!embedded && <View style={styles.header}>
         <View>
           <Text style={styles.headerTitle}>Category Rules</Text>
           <Text style={styles.headerSub}>{rules.length} rules · {filteredRules.length} shown</Text>
@@ -467,7 +467,13 @@ export function CategoryRulesScreen() {
         <TouchableOpacity style={styles.addBtn} onPress={handleAddNew} activeOpacity={0.7}>
           <Ionicons name="add" size={22} color={colors.primary} />
         </TouchableOpacity>
-      </View>
+      </View>}
+      {embedded && <View style={styles.embeddedHeader}>
+        <Text style={styles.headerSub}>{rules.length} rules · {filteredRules.length} shown</Text>
+        <TouchableOpacity style={styles.addBtn} onPress={handleAddNew} activeOpacity={0.7}>
+          <Ionicons name="add" size={22} color={colors.primary} />
+        </TouchableOpacity>
+      </View>}
 
       {/* Filters */}
       <View style={styles.filterRow}>
@@ -568,6 +574,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
+  },
+  embeddedHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
   },
   headerTitle: {
     fontSize: fontSize.xxl,

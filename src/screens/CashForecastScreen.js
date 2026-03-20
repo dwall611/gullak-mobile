@@ -362,11 +362,11 @@ export function CashForecastScreen({ embedded = false }) {
 
   if (loading && !refreshing) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
-        <View style={styles.header}>
+      <View style={[styles.container, embedded ? {} : { paddingTop: insets.top }]}>
+        {!embedded && <View style={styles.header}>
           <Text style={styles.headerTitle}>Cash Forecast</Text>
           <Text style={styles.headerSub}>{monthLabel}</Text>
-        </View>
+        </View>}
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
@@ -376,10 +376,10 @@ export function CashForecastScreen({ embedded = false }) {
 
   if (error) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
-        <View style={styles.header}>
+      <View style={[styles.container, embedded ? {} : { paddingTop: insets.top }]}>
+        {!embedded && <View style={styles.header}>
           <Text style={styles.headerTitle}>Cash Forecast</Text>
-        </View>
+        </View>}
         <View style={styles.center}>
           <Ionicons name="alert-circle-outline" size={40} color={colors.expense} />
           <Text style={styles.errorText}>{error}</Text>

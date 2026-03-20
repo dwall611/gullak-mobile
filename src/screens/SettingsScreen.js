@@ -56,7 +56,7 @@ export function SettingsScreen() {
 
       {/* Tab Content */}
       <View style={styles.content}>
-        <ActiveComponent />
+        <ActiveComponent embedded />
       </View>
     </View>
   );

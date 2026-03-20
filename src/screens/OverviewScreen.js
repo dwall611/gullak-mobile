@@ -335,6 +335,7 @@ export function OverviewScreen() {
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
   const [stats, setStats] = useState(null);
   const [alerts, setAlerts] = useState([]);
   const [liabilities, setLiabilities] = useState(null);
@@ -366,6 +367,7 @@ export function OverviewScreen() {
   const timePct = (dates.daysElapsed / dates.daysInMonth) * 100;
 
   const loadData = useCallback(async () => {
+    setError(null);
     try {
       const [statsData, alertHistory, categoryTotals, accountsData, recurringResp, liabResp] = await Promise.all([
         api.getSummary({ start_date: dates.startDate, end_date: dates.endDate }),
@@ -628,6 +630,7 @@ export function OverviewScreen() {
       }
     } catch (err) {
       console.error('[OverviewScreen] Error:', err);
+      setError(err.message || 'Failed to load data');
     }
   }, [dates, timePct]);
 
@@ -659,6 +662,17 @@ export function OverviewScreen() {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading overview...</Text>
+        </View>
+      ) : error ? (
+        <View style={styles.loadingContainer}>
+          <Ionicons name="alert-circle-outline" size={40} color={colors.expense} />
+          <Text style={[styles.loadingText, { color: colors.expense, textAlign: 'center' }]}>{error}</Text>
+          <TouchableOpacity
+            style={{ backgroundColor: colors.primary, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: radius.md, marginTop: spacing.sm }}
+            onPress={() => { setLoading(true); loadData().finally(() => setLoading(false)); }}
+          >
+            <Text style={{ color: '#fff', fontWeight: fontWeight.semibold }}>Retry</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <ScrollView

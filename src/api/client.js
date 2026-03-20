@@ -31,6 +31,18 @@ export function clearCache(pattern) {
   }
 }
 
+const FETCH_TIMEOUT_MS = 15000; // 15 second timeout to prevent eternal loading
+
+async function fetchWithTimeout(url, fetchOptions) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...fetchOptions, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function fetchAPI(endpoint, options = {}, useCache = false) {
   const url = `${API_BASE}${endpoint}`;
   const cacheKey = useCache ? endpoint : null;
@@ -40,7 +52,7 @@ async function fetchAPI(endpoint, options = {}, useCache = false) {
     if (cached) return cached;
   }
 
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     headers: {
       'Content-Type': 'application/json',
       ...options.headers,
@@ -73,7 +85,7 @@ async function fetchWithParams(endpoint, params = {}, useCache = false) {
     if (cached) return cached;
   }
 
-  const response = await fetch(`${API_BASE}${fullEndpoint}`, {
+  const response = await fetchWithTimeout(`${API_BASE}${fullEndpoint}`, {
     headers: { 'Content-Type': 'application/json' },
   });
 

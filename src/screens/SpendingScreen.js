@@ -234,7 +234,11 @@ function AccountItem({ account, amount, percentage, color, onPress }) {
 
 // ─── Category Trend Item ──────────────────────────────────────────────────────
 function CategoryTrendItem({ category, months, onPress }) {
-  const monthLabels = ['Jan', 'Feb', 'Mar'];
+  const monthLabels = Array.from({length: 3}, (_, i) => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 2 + i);
+    return d.toLocaleDateString('en-US', { month: 'short' });
+  });
   const monthColors = ['#3b82f6', '#10b981', '#f59e0b']; // blue, green, amber
   const maxValue = Math.max(...months, 1);
   
@@ -351,7 +355,6 @@ function TransactionItem({ transaction }) {
 export function SpendingScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
-  const [forceRefresh, setForceRefresh] = useState(false);
 
   const [stats, setStats] = useState(null);
   const [allTransactions, setAllTransactions] = useState([]);
@@ -367,21 +370,29 @@ export function SpendingScreen() {
   const [showCustomPicker, setShowCustomPicker] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
   const [viewMode, setViewMode] = useState('summary'); // summary | detailed
   const [selectedCategory, setSelectedCategory] = useState(null);
   
   const availableMonths = useMemo(() => getAvailableMonths(), []);
 
   const loadDashboard = useCallback(async () => {
+    setError(null);
     try {
       const { start_date, end_date } = getDateRange(dateRange, selectedMonth, customFromDate, customToDate);
+
+      // Compute last-3-months range for category trends dynamically
+      const trendNow = new Date();
+      const trend3MonthsAgo = new Date(trendNow.getFullYear(), trendNow.getMonth() - 2, 1);
+      const trendStart = `${trend3MonthsAgo.getFullYear()}-${String(trend3MonthsAgo.getMonth()+1).padStart(2,'0')}-01`;
+      const trendEnd = `${trendNow.getFullYear()}-${String(trendNow.getMonth()+1).padStart(2,'0')}-${String(new Date(trendNow.getFullYear(),trendNow.getMonth()+1,0).getDate()).padStart(2,'0')}`;
 
       const [statsData, categoryTotals, accountTotals, allTx, categoryTrendsData, recurringTxData] = await Promise.all([
         api.getSummary({ start_date, end_date }),
         api.getSpendingByCategory(start_date, end_date, false),
         api.getAccountSpending(start_date, end_date),
         api.getTransactions({ start_date, end_date, sort_by: 'date', order: 'desc' }),
-        api.getSpendingByCategory('2026-01-01', '2026-03-31', true),
+        api.getSpendingByCategory(trendStart, trendEnd, true),
         api.getRecurringTransactions(3),
       ]);
 
@@ -424,7 +435,12 @@ export function SpendingScreen() {
         trendsMap[cat][month] = item.total;
       });
 
-      const months = ['2026-01', '2026-02', '2026-03'];
+      // Generate last 3 months dynamically
+      const now = new Date();
+      const months = Array.from({length: 3}, (_, i) => {
+        const d = new Date(now.getFullYear(), now.getMonth() - 2 + i, 1);
+        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      });
       const trendsList = Object.keys(trendsMap)
         .map(cat => {
           const values = months.map(m => trendsMap[cat][m] || 0);
@@ -441,6 +457,7 @@ export function SpendingScreen() {
       setRecurringData((recurringTxData.data || []).slice(0, 10));
     } catch (err) {
       console.error('Error loading dashboard:', err);
+      setError(err.message || 'Failed to load spending data');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -521,6 +538,27 @@ export function SpendingScreen() {
     return (
       <View style={[styles.container, styles.centerContent]}>
         <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={{ color: colors.textSecondary, marginTop: spacing.md, fontSize: fontSize.sm }}>Loading spending data...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Spending</Text>
+        </View>
+        <View style={[styles.centerContent, { flex: 1 }]}>
+          <Ionicons name="alert-circle-outline" size={40} color={colors.expense} />
+          <Text style={{ color: colors.expense, marginTop: spacing.md, textAlign: 'center', paddingHorizontal: spacing.xl }}>{error}</Text>
+          <TouchableOpacity
+            style={{ backgroundColor: colors.primary, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: radius.md, marginTop: spacing.md }}
+            onPress={loadDashboard}
+          >
+            <Text style={{ color: '#fff', fontWeight: fontWeight.semibold }}>Retry</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
