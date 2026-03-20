@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,25 +6,206 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api/client';
 import { colors, spacing, radius, fontSize, fontWeight } from '../utils/theme';
 
-function StatCard({ icon, label, value, color = colors.primary }) {
+// Human-readable time ago
+function timeAgo(dateString) {
+  if (!dateString) return 'Never';
+  
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins} min ago`;
+  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays} days ago`;
+  
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+// Account type badge colors
+const ACCOUNT_TYPE_COLORS = {
+  credit: colors.expense,
+  'credit card': colors.expense,
+  depository: colors.info,
+  checking: '#3b82f6',   // blue
+  savings: '#10b981',    // green
+  investment: '#a855f7', // purple
+  brokerage: '#a855f7',
+  '401k': '#a855f7',
+  loan: '#f59e0b',       // amber
+  paypal: '#009cde',     // paypal blue
+};
+
+function getAccountTypeColor(type, subtype) {
+  const key = (subtype || type || '').toLowerCase();
+  return ACCOUNT_TYPE_COLORS[key] || ACCOUNT_TYPE_COLORS[type?.toLowerCase()] || colors.textMuted;
+}
+
+function AccountBadge({ account }) {
+  const badgeColor = getAccountTypeColor(account.type, account.subtype);
+  const typeLabel = account.subtype || account.type || 'Account';
+  
   return (
-    <View style={styles.statCard}>
-      <Ionicons name={icon} size={24} color={color} />
-      <Text style={styles.statLabel}>{label}</Text>
-      <Text style={[styles.statValue, { color }]}>{value}</Text>
+    <View style={styles.accountRow}>
+      <View style={[styles.accountBadge, { backgroundColor: badgeColor + '20' }]}>
+        <View style={[styles.accountDot, { backgroundColor: badgeColor }]} />
+        <Text style={[styles.accountType, { color: badgeColor }]}>
+          {typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1)}
+        </Text>
+      </View>
+      <Text style={styles.accountName} numberOfLines={1}>
+        {account.name}
+      </Text>
+      {account.mask && (
+        <Text style={styles.accountMask}>••{account.mask}</Text>
+      )}
+    </View>
+  );
+}
+
+function ProductBadge({ product }) {
+  const icons = {
+    transactions: 'swap-horizontal',
+    balances: 'wallet',
+    investments: 'trending-up',
+    liabilities: 'alert-circle',
+  };
+  
+  const labels = {
+    transactions: 'Transactions',
+    balances: 'Balances',
+    investments: 'Investments',
+    liabilities: 'Liabilities',
+  };
+  
+  return (
+    <View style={styles.productBadge}>
+      <Ionicons name={icons[product] || 'checkmark'} size={10} color={colors.textMuted} />
+      <Text style={styles.productText}>{labels[product] || product}</Text>
+    </View>
+  );
+}
+
+function InstitutionCard({ institution }) {
+  const isSuccess = institution.status === 'success';
+  const isError = institution.status === 'error';
+  
+  return (
+    <View style={styles.institutionCard}>
+      {/* Header */}
+      <View style={styles.institutionHeader}>
+        <View style={styles.institutionTitleRow}>
+          <Text style={styles.institutionName}>{institution.name}</Text>
+          {institution.status && (
+            <View style={[
+              styles.statusBadge,
+              isError && styles.statusBadgeError
+            ]}>
+              <Ionicons 
+                name={isSuccess ? 'checkmark-circle' : 'alert-circle'} 
+                size={12} 
+                color={isSuccess ? colors.income : colors.expense} 
+              />
+            </View>
+          )}
+        </View>
+        <Text style={styles.lastSyncText}>
+          <Ionicons name="time-outline" size={11} color={colors.textMuted} /> {timeAgo(institution.last_sync_at)}
+        </Text>
+      </View>
+      
+      {/* Products being synced */}
+      {institution.products && institution.products.length > 0 && (
+        <View style={styles.productsRow}>
+          {institution.products.map((product, idx) => (
+            <ProductBadge key={idx} product={product} />
+          ))}
+        </View>
+      )}
+      
+      {/* Accounts */}
+      {institution.accounts && institution.accounts.length > 0 && (
+        <View style={styles.accountsList}>
+          {institution.accounts.map((account, idx) => (
+            <AccountBadge key={idx} account={account} />
+          ))}
+        </View>
+      )}
+      
+      {/* Sync stats */}
+      {institution.status && (
+        <View style={styles.syncStats}>
+          {isError && institution.error_message && (
+            <Text style={styles.errorText}>{institution.error_message}</Text>
+          )}
+          {isSuccess && (
+            <View style={styles.syncStatsRow}>
+              {institution.transactions_added > 0 && (
+                <Text style={styles.syncStatText}>
+                  <Text style={styles.syncStatValue}>+{institution.transactions_added}</Text> added
+                </Text>
+              )}
+              {institution.transactions_modified > 0 && (
+                <Text style={styles.syncStatText}>
+                  <Text style={styles.syncStatValue}>{institution.transactions_modified}</Text> modified
+                </Text>
+              )}
+              {institution.transactions_removed > 0 && (
+                <Text style={styles.syncStatText}>
+                  <Text style={styles.syncStatValue}>-{institution.transactions_removed}</Text> removed
+                </Text>
+              )}
+              {institution.transactions_added === 0 && 
+               institution.transactions_modified === 0 && 
+               institution.transactions_removed === 0 && (
+                <Text style={styles.syncStatEmpty}>No changes</Text>
+              )}
+            </View>
+          )}
+        </View>
+      )}
     </View>
   );
 }
 
 export function SyncScreen() {
   const [syncing, setSyncing] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [status, setStatus] = useState(null);
-  const [lastSync, setLastSync] = useState(null);
+  const [syncData, setSyncData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const loadSyncStatus = useCallback(async () => {
+    try {
+      const data = await api.getSyncStatus();
+      setSyncData(data);
+    } catch (error) {
+      console.error('Failed to load sync status:', error);
+      setStatus({ type: 'error', message: 'Failed to load sync status' });
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSyncStatus();
+  }, [loadSyncStatus]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadSyncStatus();
+    setRefreshing(false);
+  }, [loadSyncStatus]);
 
   const triggerSync = async () => {
     try {
@@ -33,18 +214,18 @@ export function SyncScreen() {
 
       await api.triggerSync();
       
-      setLastSync(new Date().toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      }));
+      // Reload sync status after triggering
+      setTimeout(() => {
+        loadSyncStatus();
+      }, 2000);
 
       setStatus({ 
         type: 'success', 
-        message: 'Sync completed successfully! New transactions have been pulled from the last 1-2 days.' 
+        message: 'Sync started! Pull to refresh for updates.' 
       });
+      
+      // Clear status after 3 seconds
+      setTimeout(() => setStatus(null), 3000);
     } catch (error) {
       setStatus({ 
         type: 'error', 
@@ -76,42 +257,13 @@ export function SyncScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Info Card */}
-      <View style={styles.infoCard}>
-        <View style={styles.infoIconContainer}>
-          <Ionicons name="sync-circle-outline" size={32} color={colors.primary} />
-        </View>
-        <Text style={styles.infoTitle}>Manual Sync</Text>
-        <Text style={styles.infoText}>
-          Trigger a manual sync with your bank accounts. This will pull the latest transactions from the last 1-2 days (incremental sync).
-        </Text>
-      </View>
-
-      {/* Stats */}
-      <View style={styles.statsRow}>
-        <StatCard 
-          icon="cloud-download-outline" 
-          label="Sync Type" 
-          value="Incremental"
-          color={colors.primary}
-        />
-        <StatCard 
-          icon="calendar-outline" 
-          label="Lookback" 
-          value="1-2 days"
-          color="#f59e0b"
-        />
-      </View>
-
-      {/* Last Sync */}
-      {lastSync && (
-        <View style={styles.lastSyncCard}>
-          <Ionicons name="time-outline" size={16} color={colors.textMuted} />
-          <Text style={styles.lastSyncText}>Last synced: {lastSync}</Text>
-        </View>
-      )}
-
+    <ScrollView 
+      style={styles.container} 
+      contentContainerStyle={styles.content}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+      }
+    >
       {/* Sync Button */}
       <TouchableOpacity
         style={[styles.syncButton, syncing && styles.syncButtonDisabled]}
@@ -142,36 +294,33 @@ export function SyncScreen() {
         </View>
       )}
 
-      {/* How It Works */}
-      <View style={styles.howItWorksCard}>
-        <Text style={styles.howItWorksTitle}>How Sync Works</Text>
-        <View style={styles.howItWorksList}>
-          <View style={styles.howItWorksItem}>
-            <Ionicons name="shield-checkmark-outline" size={18} color={colors.primary} />
-            <Text style={styles.howItWorksText}>
-              Secure connection to your bank via Plaid
-            </Text>
-          </View>
-          <View style={styles.howItWorksItem}>
-            <Ionicons name="flash-outline" size={18} color={colors.primary} />
-            <Text style={styles.howItWorksText}>
-              Fast incremental sync (only recent transactions)
-            </Text>
-          </View>
-          <View style={styles.howItWorksItem}>
-            <Ionicons name="refresh-outline" size={18} color={colors.primary} />
-            <Text style={styles.howItWorksText}>
-              Updates balances and pulls new transactions
-            </Text>
-          </View>
-          <View style={styles.howItWorksItem}>
-            <Ionicons name="lock-closed-outline" size={18} color={colors.primary} />
-            <Text style={styles.howItWorksText}>
-              Your credentials are never stored
-            </Text>
-          </View>
-        </View>
+      {/* Institutions List */}
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Connected Institutions</Text>
+        {syncData?.institutions && (
+          <Text style={styles.sectionCount}>{syncData.institutions.length}</Text>
+        )}
       </View>
+
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      ) : syncData?.institutions?.length > 0 ? (
+        <View style={styles.institutionsList}>
+          {syncData.institutions.map((institution, idx) => (
+            <InstitutionCard key={institution.id || idx} institution={institution} />
+          ))}
+        </View>
+      ) : (
+        <View style={styles.emptyState}>
+          <Ionicons name="cloud-offline-outline" size={48} color={colors.textMuted} />
+          <Text style={styles.emptyText}>No institutions connected</Text>
+          <Text style={styles.emptySubtext}>
+            Connect a bank account through the web dashboard to get started.
+          </Text>
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -183,70 +332,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: spacing.md,
-  },
-  infoCard: {
-    backgroundColor: colors.card,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-  },
-  infoIconContainer: {
-    marginBottom: spacing.md,
-  },
-  infoTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.bold,
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
-  infoText: {
-    fontSize: fontSize.base,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginBottom: spacing.md,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    gap: spacing.xs,
-  },
-  statLabel: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  statValue: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold,
-  },
-  lastSyncCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    padding: spacing.sm,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-  },
-  lastSyncText: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
+    paddingBottom: spacing.xxl,
   },
   syncButton: {
     flexDirection: 'row',
@@ -283,31 +369,168 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     lineHeight: 20,
   },
-  howItWorksCard: {
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  sectionTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.semibold,
+    color: colors.text,
+  },
+  sectionCount: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
     backgroundColor: colors.card,
-    borderRadius: radius.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.sm,
+  },
+  institutionsList: {
+    gap: spacing.md,
+  },
+  institutionCard: {
+    backgroundColor: colors.card,
+    borderRadius: radius.lg,
     padding: spacing.md,
     borderWidth: 1,
     borderColor: colors.cardBorder,
   },
-  howItWorksTitle: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold,
-    color: colors.text,
-    marginBottom: spacing.md,
+  institutionHeader: {
+    marginBottom: spacing.sm,
   },
-  howItWorksList: {
-    gap: spacing.md,
-  },
-  howItWorksItem: {
+  institutionTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
   },
-  howItWorksText: {
+  institutionName: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.semibold,
+    color: colors.text,
+  },
+  statusBadge: {
+    padding: spacing.xs,
+  },
+  statusBadgeError: {
+    backgroundColor: colors.expense + '20',
+    borderRadius: radius.full,
+  },
+  lastSyncText: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    marginTop: spacing.xs,
+  },
+  productsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  productBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: colors.background,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.sm,
+  },
+  productText: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+  },
+  accountsList: {
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+    paddingTop: spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: colors.cardBorder,
+  },
+  accountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  accountBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+  },
+  accountDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  accountType: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.medium,
+  },
+  accountName: {
     flex: 1,
     fontSize: fontSize.sm,
     color: colors.textSecondary,
-    lineHeight: 20,
+  },
+  accountMask: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    fontFamily: 'monospace',
+  },
+  syncStats: {
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.cardBorder,
+  },
+  syncStatsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+  },
+  syncStatText: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+  },
+  syncStatValue: {
+    fontWeight: fontWeight.semibold,
+    color: colors.text,
+  },
+  syncStatEmpty: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    fontStyle: 'italic',
+  },
+  errorText: {
+    fontSize: fontSize.xs,
+    color: colors.expense,
+  },
+  loadingContainer: {
+    padding: spacing.xxl,
+    alignItems: 'center',
+  },
+  emptyState: {
+    alignItems: 'center',
+    padding: spacing.xxl,
+    backgroundColor: colors.card,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  emptyText: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.semibold,
+    color: colors.text,
+    marginTop: spacing.md,
+  },
+  emptySubtext: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: spacing.xs,
   },
 });

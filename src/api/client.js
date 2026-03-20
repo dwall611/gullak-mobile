@@ -4,7 +4,7 @@
 const API_BASE = 'http://100.84.80.76:3001/api';
 // Fallback: 'http://DeathStar:3001/api'
 
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL = 30 * 1000; // 30 seconds
 const cache = new Map();
 
 function getCached(key) {
@@ -24,10 +24,10 @@ function setCache(key, data) {
 export function clearCache(pattern) {
   if (!pattern) {
     cache.clear();
-    return;
-  }
-  for (const key of cache.keys()) {
-    if (key.includes(pattern)) cache.delete(key);
+  } else {
+    for (const key of cache.keys()) {
+      if (key.includes(pattern)) cache.delete(key);
+    }
   }
 }
 
@@ -124,6 +124,7 @@ export const api = {
     clearCache();
     return fetchAPI('/sync', { method: 'POST' });
   },
+  getSyncStatus: () => fetchAPI('/sync/status', {}, false),
 
   // Liabilities
   getLiabilities: () => fetchAPI('/liabilities', {}, true),
@@ -156,8 +157,8 @@ export const api = {
   },
 
   // Category Rules
-  getCategoryRules: () => fetchAPI('/category-rules', {}, false),
-  createCategoryRule: (data) => fetchAPI('/category-rules', { method: 'POST', body: JSON.stringify(data) }),
+  getCategoryRules: () => fetchAPI('/category-rules/rules', {}, false),
+  createCategoryRule: (data) => fetchAPI('/category-rules/rules', { method: 'POST', body: JSON.stringify(data) }),
   updateCategoryRule: (id, data) => fetchAPI(`/category-rules/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteCategoryRule: (id) => fetchAPI(`/category-rules/${id}`, { method: 'DELETE' }),
   toggleCategoryRule: (id, isActive) => fetchAPI(`/category-rules/${id}/toggle`, { method: 'POST', body: JSON.stringify({ is_active: isActive }) }),
@@ -182,4 +183,29 @@ export const api = {
   getInvestmentHoldings: () => fetchAPI('/investments/holdings', {}, true),
   getPortfolioHistory: (days = 30) =>
     fetchWithParams('/investments/portfolio-history', { days }, true),
+
+  // Transaction updates
+  updateTransactionCategory: async (transactionId, category, categoryId) => {
+    const result = await fetchAPI(`/transactions/${transactionId}/category`, {
+      method: 'PATCH',
+      body: JSON.stringify({ category, category_id: categoryId }),
+    });
+    // Clear caches AFTER the update completes to ensure fresh data
+    clearCache(); // Clear ALL caches to ensure spending screen gets fresh data
+    return result;
+  },
+  updateTransactionRecurring: (transactionId, isRecurring) =>
+    fetchAPI(`/transactions/${transactionId}/recurring`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_recurring: isRecurring }),
+    }),
+  bulkUpdateTransactionCategory: async (transactionIds, category, categoryId) => {
+    const result = await fetchAPI('/transactions/bulk-category', {
+      method: 'PUT',
+      body: JSON.stringify({ transaction_ids: transactionIds, category, category_id: categoryId }),
+    });
+    // Clear caches AFTER the update completes to ensure fresh data
+    clearCache(); // Clear ALL caches to ensure spending screen gets fresh data
+    return result;
+  },
 };

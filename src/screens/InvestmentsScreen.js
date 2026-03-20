@@ -46,6 +46,15 @@ function fmtDateShort(dateStr) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+function fmtDateQuarterly(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  const month = d.toLocaleDateString('en-US', { month: 'short' });
+  const year = d.getFullYear().toString().slice(-2);
+  return `${month} '${year}`;
+}
+
 // ─── StatCard ─────────────────────────────────────────────────────────────────
 function StatCard({ label, value, sub, icon, color }) {
   const textColor = color === 'green' ? colors.income
@@ -75,7 +84,15 @@ function PortfolioChart({ history }) {
     ? history.filter((_, i) => i % Math.ceil(history.length / 15) === 0 || i === history.length - 1)
     : history;
 
-  const labels = sampled.map(h => fmtDateShort(h.date));
+  // Show labels only at quarterly intervals (every ~3rd point) to avoid overlap
+  const labelInterval = Math.max(1, Math.floor(sampled.length / 5));
+  const labels = sampled.map((h, i) => {
+    // Show first, last, and every labelInterval points
+    if (i === 0 || i === sampled.length - 1 || i % labelInterval === 0) {
+      return fmtDateQuarterly(h.date);
+    }
+    return '';
+  });
   const values = sampled.map(h => h.total_value ?? 0);
 
   const chartData = {
@@ -103,7 +120,7 @@ function PortfolioChart({ history }) {
 
   return (
     <View style={styles.chartCard}>
-      <Text style={styles.chartTitle}>Portfolio Value (30 Days)</Text>
+      <Text style={styles.chartTitle}>Portfolio Value</Text>
       <LineChart
         data={chartData}
         width={screenWidth - spacing.md * 2 - spacing.md * 2}
@@ -185,7 +202,7 @@ export function InvestmentsScreen({ embedded = false }) {
     try {
       const [holdingsData, historyData] = await Promise.all([
         api.getInvestmentHoldings(),
-        api.getPortfolioHistory(30),
+        api.getPortfolioHistory(730),
       ]);
       setHoldings(holdingsData.holdings || []);
       setHistory(historyData.history || []);
@@ -281,7 +298,7 @@ export function InvestmentsScreen({ embedded = false }) {
           <StatCard
             label="Total Value"
             value={fmtFull(stats.totalValue)}
-            sub={stats.changePct >= 0 ? `+${stats.changePct.toFixed(1)}% (30d)` : `${stats.changePct.toFixed(1)}% (30d)`}
+            sub={stats.changePct >= 0 ? `+${stats.changePct.toFixed(1)}% (2Y)` : `${stats.changePct.toFixed(1)}% (2Y)`}
             icon="trending-up"
             color={stats.change >= 0 ? 'green' : 'red'}
           />
@@ -300,7 +317,7 @@ export function InvestmentsScreen({ embedded = false }) {
             color="purple"
           />
           <StatCard
-            label="30D Change"
+            label="2Y Change"
             value={stats.change >= 0 ? `+${fmt(stats.change)}` : fmt(stats.change)}
             sub={stats.change >= 0 ? 'Gain' : 'Loss'}
             icon={stats.change >= 0 ? 'arrow-up-outline' : 'arrow-down-outline'}

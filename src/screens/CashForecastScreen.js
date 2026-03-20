@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api } from '../api/client';
 import { colors, spacing, radius, fontSize, fontWeight } from '../utils/theme';
+import { getManualRecurringForAccount, getMerchantOverride } from '../config/recurring-transactions';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmt(n) {
@@ -180,32 +181,11 @@ export function CashForecastScreen({ embedded = false }) {
         return Math.max(Math.round(avg), 7);
       };
 
-      const MANUAL_RECURRING_BY_ACCOUNT = {
-        'Main Checking': [
-          { id: 'ny529-a', merchant: 'NewYork 529 Contribution', amount: 500, dayOfMonth: 5, skipMonths: [], keyword: '529' },
-          { id: 'ny529-b', merchant: 'NewYork 529 Contribution', amount: 500, dayOfMonth: 5, skipMonths: [], keyword: '529' },
-          { id: 'pseg', merchant: 'Public Service PSEG', amount: 120, dayOfMonth: 3, skipMonths: [], keyword: 'pseg' },
-          { id: 'bilt-mortgage', merchant: 'Mortgage (Bilt)', amount: 5197, dayOfMonth: 5, skipMonths: [], keyword: 'bilt card hous' },
-        ],
-        'Rental': [
-          { id: 'rent-phadt', merchant: 'Rental Income – PHADT', amount: -2700, dayOfMonth: 30, skipMonths: [], keyword: 'phadt' },
-          { id: 'rent-hanna', merchant: 'Rental Income – Hanna', amount: -2100, dayOfMonth: 27, skipMonths: [], keyword: 'hanna' },
-          { id: 'rental-newrez', merchant: 'NEWREZ Mortgage', amount: 1702.81, dayOfMonth: 2, skipMonths: [], keyword: 'newrez' },
-          { id: 'rental-mt', merchant: 'M&T Mortgage (Rental)', amount: 1822.85, dayOfMonth: 2, skipMonths: [], keyword: 'm & t mortgage' },
-          { id: 'rental-atg', merchant: 'ATGPay', amount: 847.42, dayOfMonth: 5, skipMonths: [], keyword: 'atgpay' },
-          { id: 'rental-redbridge', merchant: 'Red Bridge Property Mgmt', amount: 530, dayOfMonth: 9, skipMonths: [], keyword: 'red bridge' },
-        ],
-      };
-      const MANUAL_RECURRING = MANUAL_RECURRING_BY_ACCOUNT[checking.name] || [];
-
-      const HUDSON_OVERRIDE = { amount: 6082, dayOfMonth: 1, skipMonths: [5, 6] };
-      const getOverride = (merchant) => {
-        if (merchant.toLowerCase().includes('hudson')) return HUDSON_OVERRIDE;
-        return null;
-      };
+      // Get manual recurring transactions from shared config (matching dashboard)
+      const MANUAL_RECURRING = getManualRecurringForAccount(checking.name);
 
       const generateDates = (rec) => {
-        const override = getOverride(rec.merchant);
+        const override = getMerchantOverride(rec.merchant);
         const dom = rec.dayOfMonth ?? rec.day_of_month ?? (override?.dayOfMonth);
 
         if (dom != null && !isNaN(dom)) {
@@ -238,34 +218,44 @@ export function CashForecastScreen({ embedded = false }) {
         return dates;
       };
 
+      // Process auto-detected recurring transactions
       for (const rec of mainRecurring) {
-        const alreadyPaid = actualTxns.some((tx) =>
+        const override = getMerchantOverride(rec.merchant);
+        const alreadyPaidThisMonth = actualTxns.some((tx) =>
           merchantMatches(rec.merchant, tx.merchant_name || tx.name || '')
         );
         const step = interval(rec);
+
         for (const projDateStr of generateDates(rec)) {
-          if (alreadyPaid && step >= 28 && projDateStr.substring(0, 7) === currentMonthStr) continue;
+          // For monthly recurrences already paid this month, skip ONLY if the
+          // projected date is still within the current month
+          if (alreadyPaidThisMonth && step >= 28 && projDateStr.substring(0, 7) === currentMonthStr) continue;
+
           projectedRows.push({
             id: `proj-${rec.merchant}-${projDateStr}`,
             date: projDateStr,
             name: rec.merchant,
             merchant_name: rec.merchant,
-            amount: rec.avgAmount,
+            amount: override?.amount ?? rec.avgAmount,
             isProjected: true,
           });
         }
       }
 
+      // Process manual recurring entries
       for (const manual of MANUAL_RECURRING) {
         const alreadyPaid = actualTxns.some((tx) =>
           (tx.merchant_name || tx.name || '').toLowerCase().includes(manual.keyword)
         );
+
         for (let mo = 0; mo <= 1; mo++) {
           const d = new Date(now.getFullYear(), now.getMonth() + mo, manual.dayOfMonth);
           const dStr = formatDateStr(d);
           if (dStr <= todayStr || dStr > projectionEndDate) continue;
           if (manual.skipMonths?.includes(d.getMonth())) continue;
+          // Skip current month if already paid this month
           if (alreadyPaid && dStr.substring(0, 7) === currentMonthStr) continue;
+
           projectedRows.push({
             id: `manual-${manual.id}-${dStr}`,
             date: dStr,
@@ -287,6 +277,7 @@ export function CashForecastScreen({ embedded = false }) {
             const stmtBal = cc.last_statement_balance;
             if (!dueDate || !stmtBal || stmtBal <= 0) continue;
             if (dueDate <= todayStr || dueDate > projectionEndDate) continue;
+            if (cc.payment_recorded) continue; // Skip if payment already recorded (cc_payment_tracking)
             const mask = cc.mask;
             const instName = (cc.institution_name || cc.account_name || '').toLowerCase();
             const alreadyPaid = actualTxns.some((tx) => {
@@ -472,7 +463,16 @@ export function CashForecastScreen({ embedded = false }) {
               <Text style={styles.emptyText}>No transactions for {monthLabel}</Text>
             </View>
           ) : (
-            rowsWithBalance.map((tx) => <TransactionRow key={tx.id} tx={tx} />)
+            <>
+              {/* Starting Balance Header */}
+              <View style={styles.startingBalanceRow}>
+                <Text style={styles.startingBalanceLabel}>Starting Balance</Text>
+                <Text style={[styles.startingBalanceValue, { color: currentBalance < 0 ? colors.expense : colors.text }]}>
+                  {fmt(currentBalance)}
+                </Text>
+              </View>
+              {rowsWithBalance.map((tx) => <TransactionRow key={tx.id} tx={tx} />)}
+            </>
           )}
         </View>
       </ScrollView>
@@ -598,6 +598,26 @@ const styles = StyleSheet.create({
   txList: {
     paddingHorizontal: spacing.md,
     gap: 2,
+  },
+  startingBalanceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing.sm + 2,
+    borderRadius: radius.sm,
+    marginBottom: spacing.xs,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  startingBalanceLabel: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    fontWeight: fontWeight.medium,
+  },
+  startingBalanceValue: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.bold,
   },
   txRow: {
     flexDirection: 'row',

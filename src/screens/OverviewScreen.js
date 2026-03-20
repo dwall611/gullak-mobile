@@ -122,9 +122,11 @@ function PaymentDueBanner({ liabilities }) {
   const todayStr = today.toISOString().split('T')[0];
   const soon = creditCards.filter(cc => {
     if (!cc.next_payment_due_date) return false;
+    if (!cc.last_statement_balance || cc.last_statement_balance <= 0) return false;
+    if (cc.payment_recorded) return false; // Skip if payment already recorded (cc_payment_tracking)
     const due = new Date(cc.next_payment_due_date);
     const daysUntilDue = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
-    return daysUntilDue >= 0 && daysUntilDue <= 7 && cc.last_statement_balance > 0;
+    return daysUntilDue >= 0 && daysUntilDue <= 7;
   });
 
   if (soon.length === 0) return null;

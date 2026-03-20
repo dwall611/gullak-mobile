@@ -13,7 +13,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { api } from '../api/client';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { api, clearCache } from '../api/client';
 import { formatCurrency } from '../utils/helpers';
 import { colors, spacing, radius, fontSize, fontWeight } from '../utils/theme';
 
@@ -174,15 +175,16 @@ function getAvailableMonths() {
 }
 
 // ─── Summary Card ─────────────────────────────────────────────────────────────
-function SummaryCard({ label, value, icon, color = colors.primary }) {
+function SummaryCard({ label, value, icon, color = colors.primary, onPress }) {
   return (
-    <View style={styles.summaryCard}>
+    <TouchableOpacity style={styles.summaryCard} onPress={onPress} disabled={!onPress}>
       <View style={styles.summaryHeader}>
         <Ionicons name={icon} size={20} color={color} />
         <Text style={styles.summaryLabel}>{label}</Text>
+        {onPress && <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />}
       </View>
       <Text style={[styles.summaryValue, { color }]}>{value}</Text>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -209,26 +211,29 @@ function CategoryItem({ category, amount, percentage, color, selected, onPress }
 }
 
 // ─── Account Item ─────────────────────────────────────────────────────────────
-function AccountItem({ account, amount, percentage, color }) {
+function AccountItem({ account, amount, percentage, color, onPress }) {
   return (
-    <View style={styles.categoryItem}>
+    <TouchableOpacity style={styles.categoryItem} onPress={onPress} disabled={!onPress}>
       <View style={styles.categoryItemHeader}>
         <View style={styles.categoryItemLeft}>
           <View style={[styles.categoryColorDot, { backgroundColor: color }]} />
           <Text style={styles.categoryItemName}>{account}</Text>
         </View>
-        <Text style={styles.categoryItemAmount}>{formatCurrency(amount)}</Text>
+        <View style={styles.categoryItemRight}>
+          <Text style={styles.categoryItemAmount}>{formatCurrency(amount)}</Text>
+          {onPress && <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ marginLeft: spacing.xs }} />}
+        </View>
       </View>
       <View style={styles.categoryItemBar}>
         <View style={[styles.categoryItemBarFill, { width: `${Math.min(percentage, 100)}%`, backgroundColor: color }]} />
       </View>
       <Text style={styles.categoryItemPercentage}>{percentage.toFixed(0)}%</Text>
-    </View>
+    </TouchableOpacity>
   );
 }
 
 // ─── Category Trend Item ──────────────────────────────────────────────────────
-function CategoryTrendItem({ category, months }) {
+function CategoryTrendItem({ category, months, onPress }) {
   const monthLabels = ['Jan', 'Feb', 'Mar'];
   const monthColors = ['#3b82f6', '#10b981', '#f59e0b']; // blue, green, amber
   const maxValue = Math.max(...months, 1);
@@ -239,24 +244,27 @@ function CategoryTrendItem({ category, months }) {
   const avgTrend = (trend1 + trend2) / 2;
 
   return (
-    <View style={styles.trendItem}>
+    <TouchableOpacity style={styles.trendItem} onPress={onPress} disabled={!onPress}>
       <View style={styles.trendHeader}>
         <Text style={styles.trendCategory}>{category}</Text>
-        {avgTrend !== 0 && (
-          <View style={styles.trendIndicator}>
-            <Ionicons 
-              name={avgTrend > 0 ? 'trending-up' : 'trending-down'} 
-              size={14} 
-              color={avgTrend > 0 ? colors.expense : colors.income} 
-            />
-            <Text style={[
-              styles.trendPercentage,
-              { color: avgTrend > 0 ? colors.expense : colors.income }
-            ]}>
-              {Math.abs(avgTrend).toFixed(0)}%
-            </Text>
-          </View>
-        )}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+          {avgTrend !== 0 && (
+            <View style={styles.trendIndicator}>
+              <Ionicons 
+                name={avgTrend > 0 ? 'trending-up' : 'trending-down'} 
+                size={14} 
+                color={avgTrend > 0 ? colors.expense : colors.income} 
+              />
+              <Text style={[
+                styles.trendPercentage,
+                { color: avgTrend > 0 ? colors.expense : colors.income }
+              ]}>
+                {Math.abs(avgTrend).toFixed(0)}%
+              </Text>
+            </View>
+          )}
+          {onPress && <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />}
+        </View>
       </View>
       <View style={styles.trendBars}>
         {months.map((amount, idx) => {
@@ -281,17 +289,20 @@ function CategoryTrendItem({ category, months }) {
           );
         })}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
 // ─── Recurring Transaction Item ───────────────────────────────────────────────
-function RecurringItem({ item }) {
+function RecurringItem({ item, onPress }) {
   return (
-    <View style={styles.recurringItem}>
+    <TouchableOpacity style={styles.recurringItem} onPress={onPress} disabled={!onPress}>
       <View style={styles.recurringHeader}>
         <Text style={styles.recurringMerchant}>{item.merchant}</Text>
-        <Text style={styles.recurringAmount}>{formatCurrency(item.avgAmount)}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+          <Text style={styles.recurringAmount}>{formatCurrency(item.avgAmount)}</Text>
+          {onPress && <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />}
+        </View>
       </View>
       <View style={styles.recurringMeta}>
         <Text style={styles.recurringMetaText}>
@@ -303,7 +314,7 @@ function RecurringItem({ item }) {
           Last: {item.lastDate} • Next: {item.nextExpected}
         </Text>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -339,6 +350,8 @@ function TransactionItem({ transaction }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function SpendingScreen() {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
+  const [forceRefresh, setForceRefresh] = useState(false);
 
   const [stats, setStats] = useState(null);
   const [allTransactions, setAllTransactions] = useState([]);
@@ -438,6 +451,17 @@ export function SpendingScreen() {
     loadDashboard();
   }, [loadDashboard]);
 
+  // Refresh data when screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      // Clear cache and reload data every time screen is focused
+      // This ensures we always show fresh data after category updates
+      clearCache();
+      loadDashboard();
+      return () => {};
+    }, [loadDashboard])
+  );
+
   const handleRefresh = () => {
     setRefreshing(true);
     loadDashboard();
@@ -458,6 +482,39 @@ export function SpendingScreen() {
 
   const handleCategoryPress = (category) => {
     setSelectedCategory(selectedCategory === category ? null : category);
+  };
+
+  // Navigation handlers
+  const navigateToTransactions = (filters = {}) => {
+    // Include current date range in navigation params
+    const dateRangeParams = {
+      dateRange: dateRange,
+      selectedMonth: selectedMonth,
+      customFromDate: customFromDate,
+      customToDate: customToDate,
+      returnTo: 'Spending', // Track originating tab for back navigation
+    };
+    navigation.navigate('Transactions', { ...dateRangeParams, ...filters });
+  };
+
+  const handleTotalSpendPress = () => {
+    navigateToTransactions();
+  };
+
+  const handleCategoryItemPress = (category) => {
+    navigateToTransactions({ filterCategory: category });
+  };
+
+  const handleAccountItemPress = (account) => {
+    navigateToTransactions({ filterAccount: account });
+  };
+
+  const handleRecurringItemPress = (merchant) => {
+    navigateToTransactions({ searchMerchant: merchant });
+  };
+
+  const handleTrendItemPress = (category) => {
+    navigateToTransactions({ filterCategory: category });
   };
 
   if (loading) {
@@ -542,6 +599,7 @@ export function SpendingScreen() {
               value={formatCurrency(stats.summary.expenses || 0)}
               icon="cash-outline"
               color={colors.expense}
+              onPress={handleTotalSpendPress}
             />
           </View>
         )}
@@ -559,7 +617,7 @@ export function SpendingScreen() {
                   percentage={item.percentage}
                   color={item.color}
                   selected={selectedCategory === item.category}
-                  onPress={() => handleCategoryPress(item.category)}
+                  onPress={() => handleCategoryItemPress(item.category)}
                 />
               ))}
             </View>
@@ -573,6 +631,7 @@ export function SpendingScreen() {
                   amount={item.amount}
                   percentage={item.percentage}
                   color={item.color}
+                  onPress={() => handleAccountItemPress(item.account)}
                 />
               ))}
             </View>
@@ -590,6 +649,7 @@ export function SpendingScreen() {
                     key={item.category}
                     category={item.category}
                     months={item.months}
+                    onPress={() => handleTrendItemPress(item.category)}
                   />
                 ))
               ) : (
@@ -601,7 +661,11 @@ export function SpendingScreen() {
               <Text style={styles.sectionTitle}>Recurring Transactions</Text>
               {recurringData.length > 0 ? (
                 recurringData.map((item, idx) => (
-                  <RecurringItem key={`${item.merchant}-${idx}`} item={item} />
+                  <RecurringItem 
+                    key={`${item.merchant}-${idx}`} 
+                    item={item}
+                    onPress={() => handleRecurringItemPress(item.merchant)}
+                  />
                 ))
               ) : (
                 <Text style={styles.emptyText}>No recurring transactions found</Text>
@@ -825,6 +889,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     flex: 1,
+  },
+  categoryItemRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   categoryColorDot: {
     width: 12,
