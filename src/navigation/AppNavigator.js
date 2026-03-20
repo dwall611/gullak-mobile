@@ -9,13 +9,13 @@ import { TransactionsScreen } from '../screens/TransactionsScreen';
 import { SpendingScreen } from '../screens/SpendingScreen';
 import { AnalyticsScreen } from '../screens/AnalyticsScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
-import { colors } from '../utils/theme';
+import { colors, surface, border } from '../utils/theme';
 
 const Tab = createBottomTabNavigator();
 
 const tabBarStyle = {
-  backgroundColor: '#0f172a',
-  borderTopColor: '#1e293b',
+  backgroundColor: surface.bg,
+  borderTopColor: border.separator,
   borderTopWidth: 1,
   height: Platform.OS === 'ios' ? 84 : 64,
   paddingTop: 8,

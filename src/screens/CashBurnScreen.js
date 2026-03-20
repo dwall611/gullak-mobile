@@ -11,7 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api } from '../api/client';
-import { colors, spacing, radius, fontSize, fontWeight } from '../utils/theme';
+import { colors, spacing, radius, fontSize, fontWeight, fontFamily } from '../utils/theme';
 
 // Helper functions
 function formatCurrency(n) {
@@ -86,8 +86,8 @@ function isCreditCardPayment(tx) {
 function StatCard({ label, value, sub, color, icon }) {
   const textColor = color === 'green' ? colors.income
     : color === 'red' ? colors.expense
-    : color === 'blue' ? '#60a5fa'
-    : color === 'amber' ? '#f59e0b'
+    : color === 'blue' ? colors.balanceLine
+    : color === 'amber' ? colors.ccPaymentAccent
     : colors.text;
 
   return (
@@ -315,7 +315,7 @@ export function CashBurnScreen({ embedded = false }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.bg,
   },
   center: {
     flex: 1,
@@ -332,6 +332,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xl,
     fontWeight: fontWeight.bold,
     color: colors.text,
+    fontFamily: 'Manrope',
   },
   headerSub: {
     fontSize: fontSize.sm,
@@ -352,14 +353,16 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     fontWeight: fontWeight.medium,
     color: colors.text,
+    fontFamily: fontFamily.body,
   },
   progressValue: {
     fontSize: fontSize.sm,
     color: colors.textSecondary,
+    fontFamily: fontFamily.body,
   },
   progressTrack: {
     height: 8,
-    backgroundColor: colors.cardBorder,
+    backgroundColor: colors.outline,
     borderRadius: radius.full,
     overflow: 'hidden',
   },
@@ -378,11 +381,11 @@ const styles = StyleSheet.create({
   statCard: {
     flex: 1,
     minWidth: '45%',
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
     borderRadius: radius.md,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.outline,
   },
   statHeader: {
     flexDirection: 'row',
@@ -396,6 +399,7 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.medium,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+    fontFamily: fontFamily.body,
   },
   statValue: {
     fontSize: fontSize.lg,
@@ -406,6 +410,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     color: colors.textSecondary,
     marginTop: 2,
+    fontFamily: fontFamily.body,
   },
   section: {
     paddingHorizontal: spacing.md,
@@ -415,6 +420,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.lg,
     fontWeight: fontWeight.semibold,
     color: colors.text,
+    fontFamily: 'Manrope',
     marginBottom: spacing.md,
   },
   categoryBar: {
@@ -444,7 +450,7 @@ const styles = StyleSheet.create({
   },
   categoryBarTrack: {
     height: 6,
-    backgroundColor: colors.cardBorder,
+    backgroundColor: colors.outline,
     borderRadius: radius.full,
     overflow: 'hidden',
     marginBottom: spacing.xs,
@@ -493,5 +499,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: fontWeight.semibold,
     fontSize: fontSize.base,
+    fontFamily: fontFamily.body,
   },
 });

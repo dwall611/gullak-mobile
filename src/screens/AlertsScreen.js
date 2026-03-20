@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api/client';
-import { colors, spacing, radius, fontSize, fontWeight } from '../utils/theme';
+import { colors, spacing, radius, fontSize, fontWeight, fontFamily } from '../utils/theme';
 
 function formatDate(dateStr) {
   if (!dateStr) return '';
@@ -508,17 +508,17 @@ function AlertRuleItem({ rule, onToggle, onDelete }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.bg,
   },
   viewToggle: {
     flexDirection: 'row',
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
     margin: spacing.md,
     marginBottom: spacing.sm,
     padding: spacing.xs,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.outline,
   },
   viewToggleBtn: {
     flex: 1,
@@ -530,7 +530,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   viewToggleBtnActive: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.bg,
   },
   viewToggleText: {
     fontSize: fontSize.sm,
@@ -560,12 +560,12 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   alertRuleItem: {
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
     borderRadius: radius.md,
     padding: spacing.md,
     marginBottom: spacing.sm,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.outline,
   },
   alertRuleHeader: {
     flexDirection: 'row',
@@ -602,7 +602,7 @@ const styles = StyleSheet.create({
   },
   modal: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.bg,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -610,12 +610,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.cardBorder,
+    borderBottomColor: colors.outline,
   },
   modalTitle: {
     fontSize: fontSize.lg,
     fontWeight: fontWeight.bold,
     color: colors.text,
+    fontFamily: 'Manrope',
   },
   modalContent: {
     flex: 1,
@@ -629,17 +630,17 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   input: {
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.outline,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     fontSize: fontSize.base,
     color: colors.text,
   },
   typeButton: {
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.primary,
@@ -660,8 +661,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
-    backgroundColor: colors.card,
+    borderColor: colors.outline,
+    backgroundColor: colors.surface,
     alignItems: 'center',
   },
   periodButtonActive: {
@@ -696,12 +697,12 @@ const styles = StyleSheet.create({
   },
   summary: {
     flexDirection: 'row',
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
     margin: spacing.md,
     padding: spacing.md,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.outline,
   },
   summaryItem: {
     flex: 1,
@@ -711,15 +712,17 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xxl,
     fontWeight: fontWeight.bold,
     color: colors.text,
+    fontFamily: 'Manrope',
   },
   summaryLabel: {
     fontSize: fontSize.sm,
     color: colors.textMuted,
     marginTop: spacing.xs,
+    fontFamily: 'Inter',
   },
   summaryDivider: {
     width: 1,
-    backgroundColor: colors.cardBorder,
+    backgroundColor: colors.outline,
   },
   section: {
     paddingHorizontal: spacing.md,
@@ -730,14 +733,15 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold,
     color: colors.text,
     marginBottom: spacing.md,
+    fontFamily: 'Manrope',
   },
   alertItem: {
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
     borderRadius: radius.md,
     padding: spacing.md,
     marginBottom: spacing.sm,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.outline,
   },
   alertHeader: {
     flexDirection: 'row',
@@ -756,6 +760,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.base,
     fontWeight: fontWeight.semibold,
     color: colors.text,
+    fontFamily: 'Manrope',
   },
   ackButton: {
     paddingHorizontal: spacing.sm,
@@ -773,6 +778,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     lineHeight: 20,
     marginBottom: spacing.sm,
+    fontFamily: 'Inter',
   },
   alertFooter: {
     flexDirection: 'row',

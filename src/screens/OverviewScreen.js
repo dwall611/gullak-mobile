@@ -20,7 +20,7 @@ import Svg, {
 } from 'react-native-svg';
 import { api } from '../api/client';
 import { formatCurrency, formatCompact, getCategoryColor } from '../utils/helpers';
-import { colors, spacing, radius, fontSize, fontWeight } from '../utils/theme';
+import { colors, spacing, radius, fontSize, fontWeight, fontFamily } from '../utils/theme';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -97,9 +97,9 @@ function AlertBanner({ alerts }) {
   if (!alerts || alerts.length === 0) return null;
 
   const severityConfig = {
-    info: { icon: 'information-circle-outline', color: '#06b6d4', bg: '#0c2233' },
-    warning: { icon: 'warning-outline', color: colors.warning, bg: '#2d1f0a' },
-    critical: { icon: 'alert-circle-outline', color: colors.expense, bg: '#2d0a0a' },
+    info: { icon: 'information-circle-outline', color: colors.infoAccent, bg: colors.infoBg },
+    warning: { icon: 'warning-outline', color: colors.warning, bg: colors.warningBg },
+    critical: { icon: 'alert-circle-outline', color: colors.expense, bg: colors.criticalBg },
   };
 
   return (
@@ -167,26 +167,26 @@ function OverviewSummaryCards({ stats }) {
   return (
     <View style={styles.summaryGrid}>
       <View style={styles.summaryRow}>
-        <View style={[styles.statCard, { backgroundColor: '#0f2d24' }]}>
+        <View style={[styles.statCard, { backgroundColor: colors.incomeBg }]}>
           <Text style={styles.statLabel}>INCOME</Text>
           <Text style={[styles.statValue, { color: colors.income }]}>{formatCompact(income)}</Text>
           <Text style={styles.statSub}>{fmt(income)}</Text>
         </View>
-        <View style={[styles.statCard, { backgroundColor: '#2d0f0f' }]}>
+        <View style={[styles.statCard, { backgroundColor: colors.expenseBg }]}>
           <Text style={styles.statLabel}>EXPENSES</Text>
           <Text style={[styles.statValue, { color: colors.expense }]}>{formatCompact(expenses)}</Text>
           <Text style={styles.statSub}>{fmt(expenses)}</Text>
         </View>
       </View>
       <View style={styles.summaryRow}>
-        <View style={[styles.statCard, { backgroundColor: netFlow >= 0 ? '#0f1e2d' : '#2d1a0f' }]}>
+        <View style={[styles.statCard, { backgroundColor: netFlow >= 0 ? colors.netFlowPositiveBg : colors.netFlowNegativeBg }]}>
           <Text style={styles.statLabel}>NET FLOW</Text>
-          <Text style={[styles.statValue, { color: netFlow >= 0 ? '#60a5fa' : '#f97316' }]}>
+          <Text style={[styles.statValue, { color: netFlow >= 0 ? colors.balanceLine : colors.warning }]}>
             {netFlow >= 0 ? '+' : '-'}{formatCompact(Math.abs(netFlow))}
           </Text>
           <Text style={styles.statSub}>{netFlow >= 0 ? 'Positive' : 'Negative'}</Text>
         </View>
-        <View style={[styles.statCard, { backgroundColor: '#1a0f2d' }]}>
+        <View style={[styles.statCard, { backgroundColor: colors.transactionsBg }]}>
           <Text style={styles.statLabel}>TRANSACTIONS</Text>
           <Text style={[styles.statValue, { color: colors.text }]}>{txCount.toLocaleString()}</Text>
           <Text style={styles.statSub}>this month</Text>
@@ -234,12 +234,12 @@ const FORECAST_PADDING_RIGHT = 8;
 const FORECAST_PADDING_TOP = 16;
 const FORECAST_PADDING_BOTTOM = 32;
 
-// Chart colors
+// Chart colors — using semantic tokens
 const FORECAST_COLORS = {
-  balanceLine: '#60a5fa',
-  paidLine: '#f87171',
-  receivedLine: '#4ade80',
-  axisLabel: '#4d7a9e',
+  balanceLine: colors.balanceLine,
+  paidLine: colors.paidLine,
+  receivedLine: colors.receivedLine,
+  axisLabel: colors.axisLabel,
 };
 
 function buildSmoothPath(points, chartW, chartH, minVal, maxVal) {
@@ -361,7 +361,7 @@ function ForecastChart({ rows, todayStr }) {
             key={idx}
             x={toX(idx)}
             y={FORECAST_CHART_HEIGHT - 4}
-            fontSize="10"
+            fontSize="11"
             fill={FORECAST_COLORS.axisLabel}
             textAnchor="middle"
           >
@@ -803,7 +803,7 @@ export function OverviewScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.bg,
   },
   header: {
     flexDirection: 'row',
@@ -816,19 +816,21 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xxl,
     fontWeight: fontWeight.bold,
     color: colors.text,
+    fontFamily: 'Manrope',
   },
   headerSub: {
     fontSize: fontSize.sm,
     color: colors.textMuted,
     marginTop: 2,
+    fontFamily: 'Inter',
   },
   refreshBtn: {
     width: 40,
     height: 40,
     borderRadius: radius.full,
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.outline,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -841,6 +843,7 @@ const styles = StyleSheet.create({
   loadingText: {
     color: colors.textSecondary,
     fontSize: fontSize.sm,
+    fontFamily: 'Inter',
   },
   scrollContent: {
     paddingTop: spacing.sm,
@@ -912,23 +915,26 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 4,
+    fontFamily: 'Inter',
   },
   statValue: {
     fontSize: fontSize.xxl,
     fontWeight: fontWeight.bold,
     marginBottom: 2,
+    fontFamily: 'Manrope',
   },
   statSub: {
     fontSize: fontSize.xs,
     color: colors.textMuted,
+    fontFamily: 'Inter',
   },
   card: {
     marginHorizontal: spacing.md,
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
     borderRadius: radius.lg,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.outline,
   },
   cardTitle: {
     fontSize: fontSize.sm,
@@ -937,6 +943,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: spacing.sm,
+    fontFamily: 'Inter',
   },
   chart: {
     borderRadius: radius.md,
@@ -988,20 +995,23 @@ const styles = StyleSheet.create({
     color: colors.text,
     flex: 1,
     marginRight: spacing.sm,
+    fontFamily: 'Inter',
   },
   categoryAmt: {
     fontSize: fontSize.sm,
     fontWeight: fontWeight.semibold,
     color: colors.text,
+    fontFamily: 'Manrope',
   },
   categoryPct: {
     fontSize: fontSize.xs,
     fontWeight: fontWeight.medium,
     color: colors.textMuted,
+    fontFamily: 'Inter',
   },
   categoryBar: {
     height: 4,
-    backgroundColor: colors.cardBorder,
+    backgroundColor: colors.outline,
     borderRadius: 2,
     overflow: 'hidden',
   },
@@ -1034,7 +1044,7 @@ const styles = StyleSheet.create({
   },
   budgetBarBg: {
     height: 14,
-    backgroundColor: '#1e293b',
+    backgroundColor: colors.surface,
     borderRadius: 7,
     overflow: 'visible',
     position: 'relative',

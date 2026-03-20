@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, spacing, radius, fontSize, fontWeight } from '../utils/theme';
+import { colors, spacing, radius, fontSize, fontWeight, fontFamily } from '../utils/theme';
 import { AlertsScreen } from './AlertsScreen';
 import { CategoryRulesScreen } from './CategoryRulesScreen';
 import { SyncScreen } from './SyncScreen';
@@ -65,22 +65,23 @@ export function SettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.bg,
   },
   header: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.cardBorder,
+    borderBottomColor: colors.outline,
   },
   headerTitle: {
     fontSize: fontSize.xxl,
     fontWeight: fontWeight.bold,
     color: colors.text,
+    fontFamily: 'Manrope',
   },
   tabBar: {
     borderBottomWidth: 1,
-    borderBottomColor: colors.cardBorder,
+    borderBottomColor: colors.outline,
   },
   tabBarContent: {
     paddingHorizontal: spacing.md,
@@ -93,12 +94,12 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
     borderRadius: radius.md,
     marginRight: spacing.sm,
   },
   tabActive: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.bg,
     borderWidth: 1,
     borderColor: colors.primary,
   },
@@ -106,9 +107,11 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     fontWeight: fontWeight.medium,
     color: colors.textMuted,
+    fontFamily: 'Inter',
   },
   tabTextActive: {
     color: colors.primary,
+    fontFamily: 'Inter',
   },
   content: {
     flex: 1,

@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LineChart } from 'react-native-chart-kit';
 import { api } from '../api/client';
-import { colors, spacing, radius, fontSize, fontWeight } from '../utils/theme';
+import { colors, spacing, radius, fontSize, fontWeight, fontFamily } from '../utils/theme';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -59,8 +59,8 @@ function fmtDateQuarterly(dateStr) {
 function StatCard({ label, value, sub, icon, color }) {
   const textColor = color === 'green' ? colors.income
     : color === 'red' ? colors.expense
-    : color === 'blue' ? '#60a5fa'
-    : color === 'purple' ? '#a78bfa'
+    : color === 'blue' ? colors.balanceLine
+    : color === 'purple' ? colors.projectedAccent
     : colors.text;
 
   return (
@@ -105,14 +105,14 @@ function PortfolioChart({ history }) {
   };
 
   const chartConfig = {
-    backgroundGradientFrom: colors.card,
-    backgroundGradientTo: colors.card,
+    backgroundGradientFrom: colors.surface,
+    backgroundGradientTo: colors.surface,
     color: (opacity = 1) => `rgba(99, 102, 241, ${opacity})`,
     labelColor: () => colors.textSecondary,
     strokeWidth: 2,
     decimalPlaces: 0,
     propsForBackgroundLines: {
-      stroke: colors.cardBorder,
+      stroke: colors.outline,
       strokeWidth: 1,
     },
     formatYLabel: (v) => fmt(parseFloat(v)),
@@ -370,7 +370,7 @@ export function InvestmentsScreen({ embedded = false }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.bg,
   },
   center: {
     flex: 1,
@@ -387,6 +387,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xl,
     fontWeight: fontWeight.bold,
     color: colors.text,
+    fontFamily: 'Manrope',
   },
   headerSub: {
     fontSize: fontSize.sm,
@@ -403,11 +404,11 @@ const styles = StyleSheet.create({
   statCard: {
     flex: 1,
     minWidth: '45%',
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
     borderRadius: radius.md,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.outline,
   },
   statHeader: {
     flexDirection: 'row',
@@ -421,6 +422,7 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.medium,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+    fontFamily: fontFamily.body,
   },
   statValue: {
     fontSize: fontSize.lg,
@@ -431,14 +433,15 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     color: colors.textSecondary,
     marginTop: 2,
+    fontFamily: fontFamily.body,
   },
   chartCard: {
     marginHorizontal: spacing.md,
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
     borderRadius: radius.md,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.outline,
     marginBottom: spacing.md,
   },
   chartTitle: {
@@ -461,14 +464,15 @@ const styles = StyleSheet.create({
     fontSize: fontSize.lg,
     fontWeight: fontWeight.semibold,
     color: colors.text,
+    fontFamily: 'Manrope',
     marginBottom: spacing.sm,
   },
   institutionCard: {
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
     borderRadius: radius.md,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.outline,
     marginBottom: spacing.sm,
   },
   institutionHeader: {
@@ -494,7 +498,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.xs,
     borderTopWidth: 1,
-    borderTopColor: colors.cardBorder,
+    borderTopColor: colors.outline,
     marginTop: spacing.xs,
   },
   accountInfo: {
@@ -517,11 +521,11 @@ const styles = StyleSheet.create({
   },
   tableContainer: {
     marginHorizontal: spacing.md,
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
     borderRadius: radius.md,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.outline,
     marginBottom: spacing.md,
   },
   tableTitle: {
@@ -536,7 +540,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingBottom: spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: colors.cardBorder,
+    borderBottomColor: colors.outline,
     marginBottom: spacing.xs,
   },
   tableHeaderCell: {
@@ -549,7 +553,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingVertical: spacing.xs + 2,
     borderBottomWidth: 1,
-    borderBottomColor: colors.cardBorder,
+    borderBottomColor: colors.outline,
   },
   tableCell: {
     fontSize: fontSize.xs,
@@ -569,6 +573,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     paddingHorizontal: spacing.xl,
+    fontFamily: fontFamily.body,
   },
   retryBtn: {
     backgroundColor: colors.primary,

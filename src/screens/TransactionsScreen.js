@@ -25,7 +25,7 @@ import {
   getMerchantName,
   getAccountName,
 } from '../utils/helpers';
-import { colors, spacing, fontSize, fontWeight } from '../utils/theme';
+import { colors, spacing, fontSize, fontWeight, fontFamily } from '../utils/theme';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -819,6 +819,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xl,
     fontWeight: fontWeight.bold,
     color: colors.text,
+    fontFamily: 'Manrope',
   },
   count: {
     fontSize: fontSize.xs,
@@ -997,6 +998,7 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold,
     color: '#e5e2e1',
     paddingRight: 8,
+    fontFamily: 'Manrope',
   },
   cellAmount: {
     width: COL.amount,
@@ -1004,6 +1006,7 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold,
     textAlign: 'right',
     fontVariant: ['tabular-nums'],
+    fontFamily: 'Manrope',
   },
   amountIncome: {
     color: '#3fe56c',
@@ -1028,7 +1031,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#222',
   },
   groupLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: fontWeight.semibold,
     color: '#3fe56c',
     letterSpacing: 0.8,

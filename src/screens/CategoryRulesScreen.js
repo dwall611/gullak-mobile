@@ -14,7 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api } from '../api/client';
-import { colors, spacing, radius, fontSize, fontWeight } from '../utils/theme';
+import { colors, spacing, radius, fontSize, fontWeight, fontFamily } from '../utils/theme';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const CATEGORY_COLORS = [
@@ -566,7 +566,7 @@ export function CategoryRulesScreen({ embedded = false }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.bg,
   },
   header: {
     flexDirection: 'row',
@@ -586,11 +586,13 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xxl,
     fontWeight: fontWeight.bold,
     color: colors.text,
+    fontFamily: 'Manrope',
   },
   headerSub: {
     fontSize: fontSize.sm,
     color: colors.textMuted,
     marginTop: 2,
+    fontFamily: 'Inter',
   },
   addBtn: {
     width: 40,
@@ -604,7 +606,7 @@ const styles = StyleSheet.create({
   },
   filterRow: {
     borderBottomWidth: 1,
-    borderBottomColor: colors.cardBorder,
+    borderBottomColor: colors.outline,
   },
   filterScroll: {
     paddingHorizontal: spacing.md,
@@ -619,8 +621,8 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: radius.full,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
-    backgroundColor: colors.card,
+    borderColor: colors.outline,
+    backgroundColor: colors.surface,
     marginRight: spacing.xs,
   },
   filterChipActive: {
@@ -674,11 +676,11 @@ const styles = StyleSheet.create({
   ruleCard: {
     marginHorizontal: spacing.md,
     marginBottom: spacing.sm,
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
     borderRadius: radius.md,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.outline,
   },
   ruleHeader: {
     flexDirection: 'row',
@@ -727,12 +729,12 @@ const styles = StyleSheet.create({
   rulePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: colors.bg,
     borderRadius: radius.sm,
     paddingHorizontal: spacing.sm,
     paddingVertical: 3,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.outline,
   },
   amtPill: {
     borderColor: colors.primary + '44',
@@ -757,7 +759,7 @@ const styles = StyleSheet.create({
   // Modal
   modalContainer: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.bg,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -767,12 +769,13 @@ const styles = StyleSheet.create({
     paddingTop: spacing.lg,
     paddingBottom: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.cardBorder,
+    borderBottomColor: colors.outline,
   },
   modalTitle: {
     fontSize: fontSize.xl,
     fontWeight: fontWeight.bold,
     color: colors.text,
+    fontFamily: 'Manrope',
   },
   modalBody: {
     flex: 1,
@@ -785,7 +788,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.lg,
     paddingTop: spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: colors.cardBorder,
+    borderTopColor: colors.outline,
     gap: spacing.sm,
   },
   fieldLabel: {
@@ -794,6 +797,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginBottom: spacing.xs,
     marginTop: spacing.md,
+    fontFamily: 'Inter',
   },
   segmentRow: {
     flexDirection: 'row',
@@ -804,8 +808,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
-    backgroundColor: colors.card,
+    borderColor: colors.outline,
+    backgroundColor: colors.surface,
     alignItems: 'center',
   },
   segmentBtnActive: {
@@ -821,9 +825,9 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold,
   },
   input: {
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.outline,
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
@@ -840,8 +844,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: radius.full,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
-    backgroundColor: colors.card,
+    borderColor: colors.outline,
+    backgroundColor: colors.surface,
     marginRight: spacing.xs,
   },
   chipActive: {

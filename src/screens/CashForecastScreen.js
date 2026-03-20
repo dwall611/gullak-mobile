@@ -12,7 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api } from '../api/client';
-import { colors, spacing, radius, fontSize, fontWeight } from '../utils/theme';
+import { colors, spacing, radius, fontSize, fontWeight, fontFamily } from '../utils/theme';
 import { getManualRecurringForAccount, getMerchantOverride } from '../config/recurring-transactions';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -85,9 +85,9 @@ function TransactionRow({ tx }) {
   const isCCPayment = !!tx.isCCPayment;
   const desc = tx.merchant_name || tx.name || 'Unknown';
 
-  const rowBg = isCCPayment ? '#1c1407' : isProjected ? '#170a2a' : colors.card;
-  const borderColor = isCCPayment ? '#f59e0b' : isProjected ? '#7c3aed' : 'transparent';
-  const dateColor = isCCPayment ? '#fbbf24' : isProjected ? '#a78bfa' : colors.textSecondary;
+  const rowBg = isCCPayment ? colors.ccPaymentRowBg : isProjected ? colors.projectedRowBg : colors.surface;
+  const borderColor = isCCPayment ? colors.ccPaymentAccent : isProjected ? colors.projectedAccent : 'transparent';
+  const dateColor = isCCPayment ? colors.ccPaymentAccent : isProjected ? colors.projectedAccent : colors.textSecondary;
   const amtColor = isDebit ? colors.expense : colors.income;
 
   return (
@@ -438,11 +438,11 @@ export function CashForecastScreen({ embedded = false }) {
         {projected.length > 0 && (
           <View style={styles.legend}>
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#7c3aed' }]} />
+              <View style={[styles.legendDot, { backgroundColor: colors.projectedAccent }]} />
               <Text style={styles.legendText}>Projected recurring</Text>
             </View>
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#f59e0b' }]} />
+              <View style={[styles.legendDot, { backgroundColor: colors.ccPaymentAccent }]} />
               <Text style={styles.legendText}>CC payment due</Text>
             </View>
           </View>
@@ -483,7 +483,7 @@ export function CashForecastScreen({ embedded = false }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.bg,
   },
   center: {
     flex: 1,
@@ -503,11 +503,13 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xl,
     fontWeight: fontWeight.bold,
     color: colors.text,
+    fontFamily: 'Manrope',
   },
   headerSub: {
     fontSize: fontSize.sm,
     color: colors.textMuted,
     marginTop: 2,
+    fontFamily: 'Inter',
   },
   accountPicker: {
     flexDirection: 'row',
@@ -517,9 +519,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
     borderRadius: radius.full,
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.outline,
   },
   accountChipActive: {
     backgroundColor: colors.primary,
@@ -543,11 +545,11 @@ const styles = StyleSheet.create({
   statCard: {
     flex: 1,
     minWidth: '45%',
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
     borderRadius: radius.md,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.outline,
   },
   statLabel: {
     fontSize: fontSize.xs,
@@ -556,16 +558,19 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 4,
+    fontFamily: 'Inter',
   },
   statValue: {
     fontSize: fontSize.lg,
     fontWeight: fontWeight.bold,
     color: colors.text,
+    fontFamily: 'Manrope',
   },
   statSub: {
     fontSize: fontSize.xs,
     color: colors.textSecondary,
     marginTop: 2,
+    fontFamily: 'Inter',
   },
   legend: {
     flexDirection: 'row',
@@ -606,14 +611,15 @@ const styles = StyleSheet.create({
     padding: spacing.sm + 2,
     borderRadius: radius.sm,
     marginBottom: spacing.xs,
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.outline,
   },
   startingBalanceLabel: {
     fontSize: fontSize.sm,
     color: colors.textMuted,
     fontWeight: fontWeight.medium,
+    fontFamily: 'Inter',
   },
   startingBalanceValue: {
     fontSize: fontSize.md,
@@ -645,9 +651,10 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: fontWeight.medium,
     flex: 1,
+    fontFamily: 'Inter',
   },
   txBadge: {
-    fontSize: 10,
+    fontSize: 11,
     color: '#a78bfa',
     fontWeight: fontWeight.semibold,
   },
@@ -657,6 +664,7 @@ const styles = StyleSheet.create({
   txAmount: {
     fontSize: fontSize.sm,
     fontWeight: fontWeight.semibold,
+    fontFamily: 'Manrope',
   },
   txBalance: {
     fontSize: fontSize.xs,

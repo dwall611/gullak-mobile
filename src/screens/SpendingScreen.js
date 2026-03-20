@@ -16,19 +16,25 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { api, clearCache } from '../api/client';
 import { formatCurrency } from '../utils/helpers';
+import { surface, text, brand, border, fontFamily, fontSize as fz, fontWeight as fw, barColors, semantic } from '../theme/designTokens';
 
 const screenWidth = Dimensions.get('window').width;
 
-// ─── Design Tokens ────────────────────────────────────────────────────────────
+// ─── Design Tokens (local alias for SpendingScreen) ───────────────────────────
 const D = {
-  bg: '#0c0e10',
-  surface: '#161a1e',
-  surfaceLow: '#111416',
-  surfaceHigh: '#20262c',
-  onSurface: '#e0e6ed',
-  onSurfaceVariant: '#a6acb3',
-  primary: '#c6c6ca',
-  outline: '#42494f',
+  bg:               surface.bg,
+  surface:          surface.base,
+  surfaceLow:       surface.low,
+  surfaceHigh:      surface.high,
+  cardBg:           surface.cardBg,     // Stitch design card background (#212121)
+  onSurface:        text.primary,
+  onSurfaceVariant: text.secondary,
+  primary:          brand.primary,
+  outline:          border.outline,
+  accentOrange:     semantic.accent,    // #f97316
+  barBlue:          barColors.oldest,   // #3b82f6
+  barGreen:         barColors.middle,   // #22c55e
+  barOrange:        barColors.current,  // #f97316
 };
 
 // ─── Category config (icon + color per category) ──────────────────────────────
@@ -52,6 +58,13 @@ const CATEGORY_CONFIG = {
 };
 
 const DEFAULT_CATEGORY_CONFIG = { color: '#6b7280', icon: 'ellipsis-horizontal-outline' };
+
+// ─── Bar label formatter (compact, no decimals) ───────────────────────────────
+function formatBarLabel(amount) {
+  const abs = Math.abs(amount);
+  if (abs >= 1000) return '$' + (amount / 1000).toFixed(1) + 'K';
+  return '$' + Math.round(amount).toLocaleString();
+}
 
 const CATEGORY_COLORS_FALLBACK = [
   '#3b82f6', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6',
@@ -263,46 +276,48 @@ function CategoryTrendItem({ category, months, onPress }) {
     d.setMonth(d.getMonth() - 2 + i);
     return d.toLocaleDateString('en-US', { month: 'short' });
   });
-  const monthColors = ['#3b82f6', '#10b981', '#f59e0b'];
+  const monthColors = [D.barBlue, D.barGreen, D.barOrange];
   const maxValue = Math.max(...months, 1);
+  const totalAmount = months.reduce((sum, v) => sum + v, 0);
 
-  const trend1 = months[0] > 0 ? ((months[1] - months[0]) / months[0]) * 100 : 0;
-  const trend2 = months[1] > 0 ? ((months[2] - months[1]) / months[1]) * 100 : 0;
-  const avgTrend = (trend1 + trend2) / 2;
+  // Get category config for icon
+  const catConfig = CATEGORY_CONFIG[category] || DEFAULT_CATEGORY_CONFIG;
 
   return (
     <TouchableOpacity style={styles.trendItem} onPress={onPress} disabled={!onPress} activeOpacity={0.75}>
-      <View style={styles.trendHeader}>
-        <Text style={styles.trendCategory}>{category}</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          {avgTrend !== 0 && (
-            <View style={[styles.trendIndicator, { backgroundColor: avgTrend > 0 ? 'rgba(239,68,68,0.12)' : 'rgba(16,185,129,0.12)' }]}>
-              <Ionicons
-                name={avgTrend > 0 ? 'trending-up' : 'trending-down'}
-                size={13}
-                color={avgTrend > 0 ? '#ef4444' : '#10b981'}
-              />
-              <Text style={[styles.trendPercentage, { color: avgTrend > 0 ? '#ef4444' : '#10b981' }]}>
-                {Math.abs(avgTrend).toFixed(0)}%
-              </Text>
-            </View>
-          )}
-          {onPress && <Ionicons name="chevron-forward" size={14} color={D.onSurfaceVariant} />}
+      {/* Left side: icon + category name + total amount */}
+      <View style={styles.trendLeft}>
+        <View style={[styles.trendIconContainer, { backgroundColor: `${catConfig.color}22` }]}>
+          <Ionicons name={catConfig.icon} size={18} color={catConfig.color} />
+        </View>
+        <View style={styles.trendInfo}>
+          <Text style={styles.trendCategory}>{category}</Text>
+          <Text style={styles.trendTotalAmount}>{formatCurrency(totalAmount)}</Text>
         </View>
       </View>
+
+      {/* Right side: 3 mini vertical bars */}
       <View style={styles.trendBars}>
         {months.map((amount, idx) => {
           const heightPercent = maxValue > 0 ? (amount / maxValue) * 100 : 0;
+          const barHeight = Math.max((heightPercent / 100) * 48, 2); // max 48px height
           return (
-            <View key={idx} style={styles.trendColumn}>
-              <Text style={styles.trendAmount}>{formatCurrency(amount)}</Text>
-              <View style={styles.trendBarContainer}>
-                <View style={[styles.trendBar, { height: `${heightPercent}%`, backgroundColor: monthColors[idx] }]} />
+            <View key={idx} style={styles.trendBarColumn}>
+              <Text style={[styles.trendBarAmount, { color: monthColors[idx] }]}>
+                {formatBarLabel(amount)}
+              </Text>
+              <View style={styles.trendBarTrack}>
+                <View
+                  style={[
+                    styles.trendBarFill,
+                    {
+                      height: barHeight,
+                      backgroundColor: monthColors[idx],
+                    },
+                  ]}
+                />
               </View>
-              <View style={styles.trendMonthLabel}>
-                <View style={[styles.monthColorDot, { backgroundColor: monthColors[idx] }]} />
-                <Text style={styles.trendMonth}>{monthLabels[idx]}</Text>
-              </View>
+              <Text style={styles.trendBarMonth}>{monthLabels[idx]}</Text>
             </View>
           );
         })}
@@ -807,7 +822,25 @@ export function SpendingScreen() {
         {/* ══════════════════ DETAILED TAB ══════════════════════════════════ */}
         {activeTab === 'detailed' && (
           <>
-            {/* ── Category Spending Trends (Last 3 Months) ─────────────────── */}
+            {/* ── Total Outflow Summary Card ─────────────────────────────────── */}
+            <View style={styles.totalOutflowCard}>
+              <Text style={styles.totalOutflowLabel}>TOTAL OUTFLOW</Text>
+              <Text style={styles.totalOutflowAmount}>{formatCurrency(totalSpend)}</Text>
+              {trendPct !== null && (
+                <View style={styles.totalOutflowTrend}>
+                  <Ionicons
+                    name={trendPct > 0 ? 'trending-up' : 'trending-down'}
+                    size={14}
+                    color={D.accentOrange}
+                  />
+                  <Text style={styles.totalOutflowTrendText}>
+                    {Math.abs(trendPct).toFixed(1)}% vs last month
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* ── Category Spending (Last 3 Months) ─────────────────────────── */}
             <View style={styles.detailedSection}>
               <Text style={styles.detailedSectionTitle}>Category Spending (Last 3 Months)</Text>
               {categoryTrends.length > 0 ? (
@@ -1022,98 +1055,124 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
   },
 
-  // ── Trend Item ────────────────────────────────────────────────────────────
-  trendItem: {
-    backgroundColor: D.surface,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: D.outline,
+  // ── Total Outflow Summary Card (Detailed tab - Stitch design) ─────────────
+  totalOutflowCard: {
+    backgroundColor: D.cardBg,
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    marginBottom: 20,
   },
-  trendHeader: {
+  totalOutflowLabel: {
+    fontSize: 12,
+    color: D.onSurfaceVariant,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+    fontFamily: 'Inter',
+    fontWeight: '600',
+  },
+  totalOutflowAmount: {
+    fontSize: 36,
+    fontWeight: '700',
+    color: D.accentOrange,
+    fontFamily: 'Manrope',
+    marginBottom: 8,
+  },
+  totalOutflowTrend: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  totalOutflowTrendText: {
+    fontSize: 13,
+    color: D.accentOrange,
+    fontFamily: 'Inter',
+    fontWeight: '500',
+  },
+
+  // ── Trend Item (Detailed tab - Stitch design) ─────────────────────────────
+  trendItem: {
+    backgroundColor: D.cardBg,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 10,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+  },
+  trendLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 12,
+  },
+  trendIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  trendInfo: {
+    flex: 1,
+    gap: 2,
   },
   trendCategory: {
-    fontSize: 14,
+    fontSize: 15,
+    fontWeight: '600',
+    color: D.onSurface,
+    fontFamily: 'Inter',
+  },
+  trendTotalAmount: {
+    fontSize: 20,
     fontWeight: '700',
     color: D.onSurface,
     fontFamily: 'Manrope',
-    flex: 1,
-  },
-  trendIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 100,
-  },
-  trendPercentage: {
-    fontSize: 11,
-    fontWeight: '700',
-    fontFamily: 'Inter',
   },
   trendBars: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    gap: 10,
+    alignItems: 'flex-end',
+    gap: 8,
+    height: 64,
+    marginLeft: 12,
   },
-  trendColumn: {
-    flex: 1,
+  trendBarColumn: {
     alignItems: 'center',
+    width: 40,
   },
-  trendAmount: {
-    fontSize: 10,
-    color: D.onSurface,
-    fontWeight: '700',
+  trendBarAmount: {
+    fontSize: 9,
+    fontWeight: '600',
+    marginBottom: 4,
     fontFamily: 'Inter',
-    marginBottom: 6,
   },
-  trendBarContainer: {
+  trendBarTrack: {
     width: '100%',
-    height: 80,
-    backgroundColor: `${D.outline}55`,
-    borderRadius: 6,
+    height: 48,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 4,
     justifyContent: 'flex-end',
     overflow: 'hidden',
   },
-  trendBar: {
+  trendBarFill: {
     width: '100%',
-    borderTopLeftRadius: 4,
-    borderTopRightRadius: 4,
+    borderRadius: 4,
   },
-  trendMonthLabel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    marginTop: 6,
-  },
-  monthColorDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  trendMonth: {
-    fontSize: 10,
+  trendBarMonth: {
+    fontSize: 11,
     color: D.onSurfaceVariant,
-    fontWeight: '700',
+    marginTop: 4,
     fontFamily: 'Inter',
     textTransform: 'uppercase',
-    letterSpacing: 0.4,
   },
 
-  // ── Recurring Item ────────────────────────────────────────────────────────
+  // ── Recurring Item (Detailed tab - Stitch design) ──────────────────────────
   recurringItem: {
-    backgroundColor: D.surface,
-    borderRadius: 12,
+    backgroundColor: D.cardBg,
+    borderRadius: 16,
     padding: 14,
     marginBottom: 8,
-    borderWidth: 1,
-    borderColor: D.outline,
   },
   recurringHeader: {
     flexDirection: 'row',
@@ -1123,15 +1182,15 @@ const styles = StyleSheet.create({
   },
   recurringMerchant: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '600',
     color: D.onSurface,
-    fontFamily: 'Manrope',
+    fontFamily: 'Inter',
     flex: 1,
   },
   recurringAmount: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#ef4444',
+    color: D.accentOrange,
     fontFamily: 'Manrope',
   },
   recurringMeta: {
@@ -1144,7 +1203,7 @@ const styles = StyleSheet.create({
   },
   recurringFooter: {
     borderTopWidth: 1,
-    borderTopColor: D.outline,
+    borderTopColor: 'rgba(255,255,255,0.08)',
     paddingTop: 6,
     marginTop: 2,
   },
@@ -1193,7 +1252,7 @@ const styles = StyleSheet.create({
     minHeight: 160,
   },
   outflowLabel: {
-    fontSize: 10,
+    fontSize: 11,
     color: D.onSurfaceVariant,
     letterSpacing: 1.3,
     textTransform: 'uppercase',
@@ -1259,7 +1318,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Manrope',
   },
   peakLabel: {
-    fontSize: 10,
+    fontSize: 11,
     color: D.onSurfaceVariant,
     fontFamily: 'Inter',
     letterSpacing: 0.4,

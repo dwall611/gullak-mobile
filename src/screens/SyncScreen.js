@@ -328,7 +328,7 @@ export function SyncScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.bg,
   },
   content: {
     padding: spacing.md,
@@ -380,6 +380,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.lg,
     fontWeight: fontWeight.semibold,
     color: colors.text,
+    fontFamily: 'Manrope',
   },
   sectionCount: {
     fontSize: fontSize.sm,

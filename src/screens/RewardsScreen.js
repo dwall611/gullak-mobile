@@ -11,7 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api } from '../api/client';
-import { colors, spacing, radius, fontSize, fontWeight } from '../utils/theme';
+import { colors, spacing, radius, fontSize, fontWeight, fontFamily } from '../utils/theme';
 import { getDateRange } from '../utils/helpers';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -330,7 +330,7 @@ export function RewardsScreen({ embedded = false }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.bg,
   },
   center: {
     flex: 1,
@@ -350,11 +350,13 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xl,
     fontWeight: fontWeight.bold,
     color: colors.text,
+    fontFamily: 'Manrope',
   },
   headerSub: {
     fontSize: fontSize.sm,
     color: colors.textMuted,
     marginTop: 2,
+    fontFamily: fontFamily.body,
   },
   totalBadge: {
     backgroundColor: colors.primary + '22',
@@ -468,11 +470,13 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     color: colors.textMuted,
     marginTop: 2,
+    fontFamily: fontFamily.body,
   },
   rewardCardSub: {
     fontSize: fontSize.xs,
     color: colors.textSecondary,
     marginTop: 2,
+    fontFamily: fontFamily.body,
   },
   rewardCardRight: {
     alignItems: 'flex-end',
@@ -580,5 +584,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: fontWeight.semibold,
     fontSize: fontSize.base,
+    fontFamily: fontFamily.body,
   },
 });

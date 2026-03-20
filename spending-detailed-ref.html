@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Spending Analysis</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script>
+ tailwind.config = {
+ theme: {
+ extend: {
+ colors: {
+ appDark: '#0b0b0b',
+ cardBg: '#212121',
+ textGray: '#a3a3a3',
+ textLight: '#f3f4f6',
+ accentOrange: '#f97316',
+ barBlue: '#3b82f6',
+ barGreen: '#22c55e',
+ navBg: 'rgba(20, 20, 20, 0.95)',
+ },
+ fontFamily: {
+ sans: ['Inter', 'sans-serif'],
+ }
+ }
+ }
+ }
+ </script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+<style>
+ body {
+ min-height: max(884px, 100dvh);
+ }
+ </style>
+ </head>
+<body class="bg-appDark text-textLight font-sans antialiased min-h-screen flex flex-col pt-12 px-4 sm:px-6 pb-32">
+<!-- BEGIN: Header -->
+<header class="flex justify-between items-center mb-6" data-purpose="main-header">
+<h1 class="text-2xl font-bold tracking-tight">Spending Analysis</h1>
+<button class="bg-cardBg text-textLight px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium hover:bg-gray-700 transition-colors">
+ March 2024
+ <i class="fa-solid fa-chevron-down text-xs text-textGray"></i>
+</button>
+</header>
+<!-- END: Header -->
+<!-- BEGIN: Main Content -->
+<main class="flex-1 flex flex-col gap-4">
+<!-- BEGIN: Total Outflow Summary -->
+<section class="bg-cardBg rounded-2xl p-6 text-center shadow-lg" data-purpose="total-summary">
+<h2 class="text-textGray text-sm font-semibold tracking-wider uppercase mb-2">Total Outflow</h2>
+<div class="text-4xl font-bold text-accentOrange mb-3">$12,916.88</div>
+<div class="text-accentOrange text-sm flex items-center justify-center gap-1 font-medium">
+<i class="fa-solid fa-arrow-trend-up"></i>
+ 12.4% vs last month
+ </div>
+</section>
+<!-- END: Total Outflow Summary -->
+<!-- BEGIN: Category List -->
+<div class="flex flex-col gap-3" data-purpose="category-list">
+<!-- Travel Card -->
+<article class="bg-cardBg rounded-2xl p-4 flex justify-between items-center shadow-md">
+<div>
+<div class="flex items-center gap-3 mb-2">
+<i class="fa-solid fa-plane text-blue-400 text-lg w-6 text-center"></i>
+<h3 class="font-semibold text-lg">Travel</h3>
+</div>
+<div class="text-2xl font-bold">$11,150.69</div>
+</div>
+<div class="flex items-end gap-2 h-16">
+<div class="flex flex-col items-center justify-end h-full w-10">
+<span class="text-[10px] text-barBlue mb-1">$487.63</span>
+<div class="w-full bg-barBlue rounded-t-sm" style="height: 10%;"></div>
+<span class="text-[10px] text-textGray mt-1">Jan</span>
+</div>
+<div class="flex flex-col items-center justify-end h-full w-10">
+<span class="text-[10px] text-barGreen mb-1">$106.52</span>
+<div class="w-full bg-barGreen rounded-t-sm" style="height: 5%;"></div>
+<span class="text-[10px] text-textGray mt-1">Feb</span>
+</div>
+<div class="flex flex-col items-center justify-end h-full w-10">
+<span class="text-[10px] text-accentOrange mb-1 hidden sm:block">$11,150.89</span>
+<div class="w-full bg-accentOrange rounded-t-sm" style="height: 100%;"></div>
+<span class="text-[10px] text-textGray mt-1">Mar</span>
+</div>
+</div>
+</article>
+<!-- Food Card -->
+<article class="bg-cardBg rounded-2xl p-4 flex justify-between items-center shadow-md">
+<div>
+<div class="flex items-center gap-3 mb-2">
+<i class="fa-solid fa-utensils text-blue-400 text-lg w-6 text-center"></i>
+<h3 class="font-semibold text-lg">Food</h3>
+</div>
+<div class="text-2xl font-bold">$10,110.61</div>
+</div>
+<div class="flex items-end gap-2 h-16">
+<div class="flex flex-col items-center justify-end h-full w-10">
+<span class="text-[10px] text-barBlue mb-1">$487.63</span>
+<div class="w-full bg-barBlue rounded-t-sm" style="height: 25%;"></div>
+<span class="text-[10px] text-textGray mt-1">Jan</span>
+</div>
+<div class="flex flex-col items-center justify-end h-full w-10">
+<span class="text-[10px] text-barGreen mb-1">$106.52</span>
+<div class="w-full bg-barGreen rounded-t-sm" style="height: 10%;"></div>
+<span class="text-[10px] text-textGray mt-1">Feb</span>
+</div>
+<div class="flex flex-col items-center justify-end h-full w-10">
+<span class="text-[10px] text-accentOrange mb-1 hidden sm:block">$9,079.72</span>
+<div class="w-full bg-accentOrange rounded-t-sm" style="height: 85%;"></div>
+<span class="text-[10px] text-textGray mt-1">Mar</span>
+</div>
+</div>
+</article>
+<!-- Shopping Card -->
+<article class="bg-cardBg rounded-2xl p-4 flex justify-between items-center shadow-md">
+<div>
+<div class="flex items-center gap-3 mb-2">
+<i class="fa-solid fa-bag-shopping text-blue-400 text-lg w-6 text-center"></i>
+<h3 class="font-semibold text-lg">Shopping</h3>
+</div>
+<div class="text-2xl font-bold">$11,147.61</div>
+</div>
+<div class="flex items-end gap-2 h-16">
+<div class="flex flex-col items-center justify-end h-full w-10">
+<span class="text-[10px] text-barBlue mb-1">$182.23</span>
+<div class="w-full bg-barBlue rounded-t-sm" style="height: 15%;"></div>
+<span class="text-[10px] text-textGray mt-1">Jan</span>
+</div>
+<div class="flex flex-col items-center justify-end h-full w-10">
+<span class="text-[10px] text-barGreen mb-1">$106.52</span>
+<div class="w-full bg-barGreen rounded-t-sm" style="height: 10%;"></div>
+<span class="text-[10px] text-textGray mt-1">Feb</span>
+</div>
+<div class="flex flex-col items-center justify-end h-full w-10">
+<span class="text-[10px] text-accentOrange mb-1 hidden sm:block">$7,289.69</span>
+<div class="w-full bg-accentOrange rounded-t-sm" style="height: 70%;"></div>
+<span class="text-[10px] text-textGray mt-1">Mar</span>
+</div>
+</div>
+</article>
+<!-- Transportation Card -->
+<article class="bg-cardBg rounded-2xl p-4 flex justify-between items-center shadow-md">
+<div>
+<div class="flex items-center gap-3 mb-2">
+<i class="fa-solid fa-car text-blue-400 text-lg w-6 text-center"></i>
+<h3 class="font-semibold text-lg">Transportation</h3>
+</div>
+<div class="text-2xl font-bold">$2,385.63</div>
+</div>
+<div class="flex items-end gap-2 h-16">
+<div class="flex flex-col items-center justify-end h-full w-10">
+<span class="text-[10px] text-barBlue mb-1">$270.03</span>
+<div class="w-full bg-barBlue rounded-t-sm" style="height: 20%;"></div>
+<span class="text-[10px] text-textGray mt-1">Jan</span>
+</div>
+<div class="flex flex-col items-center justify-end h-full w-10">
+<span class="text-[10px] text-barGreen mb-1">$162.52</span>
+<div class="w-full bg-barGreen rounded-t-sm" style="height: 12%;"></div>
+<span class="text-[10px] text-textGray mt-1">Feb</span>
+</div>
+<div class="flex flex-col items-center justify-end h-full w-10">
+<span class="text-[10px] text-accentOrange mb-1 hidden sm:block">$1,769.89</span>
+<div class="w-full bg-accentOrange rounded-t-sm" style="height: 60%;"></div>
+<span class="text-[10px] text-textGray mt-1">Mar</span>
+</div>
+</div>
+</article>
+<!-- Utilities Card -->
+<article class="bg-cardBg rounded-2xl p-4 flex justify-between items-center shadow-md">
+<div>
+<div class="flex items-center gap-3 mb-2">
+<i class="fa-solid fa-droplet text-blue-400 text-lg w-6 text-center"></i>
+<h3 class="font-semibold text-lg">Utilities</h3>
+</div>
+<div class="text-2xl font-bold">$1,036.36</div>
+</div>
+<div class="flex items-end gap-2 h-16">
+<div class="flex flex-col items-center justify-end h-full w-10">
+<span class="text-[10px] text-barBlue mb-1">$130.44</span>
+<div class="w-full bg-barBlue rounded-t-sm" style="height: 15%;"></div>
+<span class="text-[10px] text-textGray mt-1">Jan</span>
+</div>
+<div class="flex flex-col items-center justify-end h-full w-10">
+<span class="text-[10px] text-barGreen mb-1">$57.77</span>
+<div class="w-full bg-barGreen rounded-t-sm" style="height: 8%;"></div>
+<span class="text-[10px] text-textGray mt-1">Feb</span>
+</div>
+<div class="flex flex-col items-center justify-end h-full w-10">
+<span class="text-[10px] text-accentOrange mb-1 hidden sm:block">$1,500.69</span>
+<div class="w-full bg-accentOrange rounded-t-sm" style="height: 75%;"></div>
+<span class="text-[10px] text-textGray mt-1">Mar</span>
+</div>
+</div>
+</article>
+<!-- Health Card -->
+<article class="bg-cardBg rounded-2xl p-4 flex justify-between items-center shadow-md">
+<div>
+<div class="flex items-center gap-3 mb-2">
+<i class="fa-solid fa-heart-pulse text-blue-400 text-lg w-6 text-center"></i>
+<h3 class="font-semibold text-lg">Health</h3>
+</div>
+<div class="text-2xl font-bold text-gray-400 blur-[2px]">$...</div>
+</div>
+<div class="flex items-end gap-2 h-16">
+<div class="flex flex-col items-center justify-end h-full w-10">
+<span class="text-[10px] text-barBlue mb-1">$138.23</span>
+<div class="w-full bg-barBlue rounded-t-sm" style="height: 10%;"></div>
+</div>
+<div class="flex flex-col items-center justify-end h-full w-10">
+</div>
+<div class="flex flex-col items-center justify-end h-full w-10">
+<span class="text-[10px] text-accentOrange mb-1 hidden sm:block">$1,044.32</span>
+<div class="w-full bg-accentOrange rounded-t-sm" style="height: 40%;"></div>
+</div>
+</div>
+</article>
+</div>
+<!-- END: Category List -->
+</main>
+<!-- END: Main Content -->
+<!-- BEGIN: Bottom Navigation -->
+<nav class="fixed bottom-0 left-0 w-full bg-navBg backdrop-blur-md border-t border-gray-800 flex justify-around items-center py-4 pb-8 z-50">
+<a class="flex flex-col items-center text-textGray hover:text-textLight transition-colors w-16" href="#">
+<i class="fa-solid fa-border-all text-xl mb-1"></i>
+<span class="text-[10px]">Dashboard</span>
+</a>
+<a class="flex flex-col items-center text-textGray hover:text-textLight transition-colors w-16" href="#">
+<i class="fa-regular fa-credit-card text-xl mb-1"></i>
+<span class="text-[10px]">Transactions</span>
+</a>
+<a class="flex flex-col items-center text-textLight w-16" href="#">
+<div class="relative">
+<i class="fa-solid fa-wallet text-xl mb-1 text-white"></i>
+<div class="absolute -bottom-2 left-1/2 -translate-x-1/2 w-1 h-1 bg-white rounded-full"></div>
+</div>
+<span class="text-[10px] font-medium mt-1">Spending</span>
+</a>
+<a class="flex flex-col items-center text-textGray hover:text-textLight transition-colors w-16" href="#">
+<i class="fa-solid fa-gear text-xl mb-1"></i>
+<span class="text-[10px]">Settings</span>
+</a>
+</nav>
+<!-- END: Bottom Navigation -->
+</body></html>
