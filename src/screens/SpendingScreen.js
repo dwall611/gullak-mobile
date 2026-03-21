@@ -231,6 +231,38 @@ function formatDateRangeLabel(startDate, endDate) {
   return `${s.toLocaleDateString('en-US', opts)} – ${e.toLocaleDateString('en-US', opts)}`;
 }
 
+// ─── CC Payment helpers ─────────────────────────────────────────────────────
+function isDueWithinDays(dateStr, days) {
+  if (!dateStr) return false;
+  const dueDate = new Date(dateStr + 'T00:00:00');
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffTime = dueDate - today;
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays >= 0 && diffDays <= days;
+}
+
+function isOverdue(dateStr) {
+  if (!dateStr) return false;
+  const dueDate = new Date(dateStr + 'T00:00:00');
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return dueDate < today;
+}
+
+function daysUntilDue(dateStr) {
+  if (!dateStr) return Infinity;
+  const today = new Date().toISOString().split('T')[0];
+  const due = dateStr.split('T')[0];
+  const diffMs = new Date(due) - new Date(today);
+  return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+}
+
+function formatAprType(type) {
+  if (!type) return 'APR';
+  return type.replace(/_/g, ' ').replace(/\w\S*/g, txt => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
+}
+
 function computePeakDay(transactions) {
   const dayMap = {};
   transactions.forEach(tx => {
@@ -383,6 +415,139 @@ function CategoryCard({ category, amount, percentage, color, icon, onPress, comp
   );
 }
 
+// ─── CC Liability Card ───────────────────────────────────────────────────────
+function CCLiabilityCard({ card, style }) {
+  const {
+    account_name,
+    mask,
+    last_statement_balance,
+    current_balance,
+    credit_limit,
+    minimum_payment_amount,
+    next_payment_due_date,
+    aprs,
+    last_payment_amount,
+    last_payment_date,
+    is_overdue,
+    payment_recorded,
+  } = card;
+
+  const utilizationPct = credit_limit > 0 ? (last_statement_balance / credit_limit) * 100 : 0;
+  const daysLeft = daysUntilDue(next_payment_due_date);
+  const hasBalance = (last_statement_balance || 0) > 0;
+  const isPastDue = hasBalance && !payment_recorded && daysLeft < 0;
+  const isUrgent = hasBalance && !payment_recorded && daysLeft <= 10 && daysLeft >= 0;
+  const paid = payment_recorded || last_statement_balance === 0;
+
+  // Status color for due date text
+  let statusColor = D.onSurfaceVariant;
+  if (isPastDue) statusColor = '#ef4444';
+  else if (isUrgent) statusColor = '#ef4444';
+  else if (paid) statusColor = '#10b981';
+
+  // Red heatmap background: 10 days = lightest (0.05), 0 days = darkest (0.25)
+  let backgroundColor = D.cardBg;
+  if (isPastDue) {
+    backgroundColor = 'rgba(239, 68, 68, 0.25)';
+  } else if (isUrgent) {
+    const opacity = 0.05 + (1 - daysLeft / 10) * 0.20;
+    backgroundColor = `rgba(239, 68, 68, ${opacity.toFixed(3)})`;
+  }
+
+  return (
+    <View style={[styles.ccLiabilityCard, { backgroundColor }, style]}>
+      {/* Header: Account name + mask */}
+      <View style={styles.ccCardHeader}>
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text style={styles.ccCardAccountName}>{account_name}</Text>
+          <Text style={styles.ccCardMask}>•••• {mask}</Text>
+        </View>
+      </View>
+
+      {/* Balance & Limit */}
+      <View style={styles.ccCardBody}>
+        <View style={styles.ccBalanceRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.ccLabel}>Statement Balance</Text>
+            <Text style={styles.ccAmount}>{formatCurrency(last_statement_balance)}</Text>
+          </View>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={styles.ccLabel}>Credit Limit</Text>
+            <Text style={styles.ccSecondaryAmount}>{formatCurrency(credit_limit)}</Text>
+          </View>
+        </View>
+
+        {/* Current Balance row */}
+        <View style={styles.ccBalanceRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.ccLabel}>Current Balance</Text>
+            <Text style={styles.ccSecondaryAmount}>
+              {current_balance != null ? formatCurrency(current_balance) : '—'}
+            </Text>
+          </View>
+        </View>
+
+        {/* Utilization bar */}
+        <View style={styles.progressTrack}>
+          <View
+            style={[
+              styles.progressFill,
+              { width: `${Math.min(utilizationPct, 100)}%`, backgroundColor: D.accentOrange },
+            ]}
+          />
+        </View>
+
+        {/* Min payment & Due date */}
+        <View style={styles.ccPaymentRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.ccLabel}>Min Payment</Text>
+            <Text style={styles.ccSecondaryAmount}>{formatCurrency(minimum_payment_amount)}</Text>
+          </View>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={styles.ccLabel}>Due Date</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Text style={[styles.ccDueDate, { color: statusColor }]}>
+                {next_payment_due_date 
+                  ? new Date(next_payment_due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                  : '—'}
+                {!payment_recorded && isPastDue && ' ⚠'}
+                {!payment_recorded && isUrgent && !isPastDue && ` · ${daysLeft}d`}
+                {payment_recorded && ' ✓'}
+              </Text>
+              {isPastDue && <Ionicons name="alert-circle" size={14} color="#ef4444" />}
+            </View>
+          </View>
+        </View>
+
+        {/* APRs */}
+        {aprs && aprs.length > 0 && (
+          <View style={styles.ccAprSection}>
+            <Text style={styles.ccLabel}>APR</Text>
+            <View style={styles.ccAprList}>
+              {aprs.slice(0, 3).map((apr, idx) => (
+                <View key={idx} style={styles.ccAprItem}>
+                  <Text style={styles.ccAprType}>{formatAprType(apr.apr_type)}</Text>
+                  <Text style={styles.ccAprRate}>{apr.apr_percentage.toFixed(2)}%</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Last payment info */}
+        {last_payment_amount > 0 && last_payment_date && (
+          <View style={styles.ccLastPayment}>
+            <Ionicons name="checkmark-done" size={14} color={D.onSurfaceVariant} />
+            <Text style={styles.ccLastPaymentText}>
+              Last payment: {formatCurrency(last_payment_amount)} on {new Date(last_payment_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            </Text>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function SpendingScreen() {
   const insets     = useSafeAreaInsets();
@@ -407,7 +572,10 @@ export function SpendingScreen() {
   const [loading, setLoading]     = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError]           = useState(null);
-  const [activeTab, setActiveTab]   = useState('summary'); // 'summary' | 'detailed'
+  const [activeTab, setActiveTab]   = useState('summary'); // 'summary' | 'detailed' | 'cc-payments'
+
+  const [liabilitiesData, setLiabilitiesData] = useState(null);
+  const [liabilitiesLoading, setLiabilitiesLoading] = useState(false);
 
   const availableMonths = useMemo(() => getAvailableMonths(), []);
 
@@ -553,16 +721,44 @@ export function SpendingScreen() {
 
   useEffect(() => { loadDashboard(); }, [loadDashboard]);
 
+  // ── Load Liabilities ────────────────────────────────────────────────────────
+  const loadLiabilities = useCallback(async () => {
+    setLiabilitiesLoading(true);
+    try {
+      const data = await api.getLiabilities();
+      setLiabilitiesData(data);
+    } catch (err) {
+      console.error('Error loading liabilities:', err);
+    } finally {
+      setLiabilitiesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'cc-payments') {
+      loadLiabilities();
+    }
+  }, [activeTab, loadLiabilities]);
+
   useFocusEffect(
     useCallback(() => {
       clearCache();
       loadDashboard();
+      if (activeTab === 'cc-payments') {
+        loadLiabilities();
+      }
       return () => {};
-    }, [loadDashboard])
+    }, [loadDashboard, loadLiabilities, activeTab])
   );
 
   // ── Handlers ──────────────────────────────────────────────────────────────
-  const handleRefresh = () => { setRefreshing(true); loadDashboard(); };
+  const handleRefresh = () => {
+    setRefreshing(true);
+    loadDashboard();
+    if (activeTab === 'cc-payments') {
+      loadLiabilities();
+    }
+  };
 
   const handleDateRangeChange = (value) => {
     setDateRange(value);
@@ -660,7 +856,11 @@ export function SpendingScreen() {
 
         {/* ── Tab Switcher ─────────────────────────────────────────────────── */}
         <View style={styles.tabSwitcher}>
-          {[{ key: 'summary', label: 'Summary' }, { key: 'detailed', label: 'Detailed' }].map(({ key, label }) => {
+          {[
+            { key: 'summary', label: 'Summary' },
+            { key: 'detailed', label: 'Detailed' },
+            { key: 'cc-payments', label: 'CC Payments' },
+          ].map(({ key, label }) => {
             const isActive = activeTab === key;
             return (
               <TouchableOpacity
@@ -872,6 +1072,74 @@ export function SpendingScreen() {
                 <Text style={styles.emptyText}>No recurring transactions found</Text>
               )}
             </View>
+          </>
+        )}
+
+        {/* ══════════════════ CC PAYMENTS TAB ════════════════════════════════ */}
+        {activeTab === 'cc-payments' && (
+          <>
+            {liabilitiesLoading ? (
+              <View style={styles.centerContent}>
+                <ActivityIndicator size="large" color={D.primary} />
+                <Text style={styles.loadingText}>Loading credit card data…</Text>
+              </View>
+            ) : (
+              <>
+                {/* ── Total Outstanding Balance Header ─────────────────────────── */}
+                <View style={styles.totalOutstandingCard}>
+                  <Text style={styles.totalOutstandingLabel}>TOTAL OUTSTANDING</Text>
+                  <Text style={styles.totalOutstandingAmount}>
+                    {formatCurrency(
+                      (liabilitiesData?.credit_cards || [])
+                        .filter(card => !card.payment_recorded && card.last_statement_balance > 0)
+                        .reduce((sum, card) => sum + card.last_statement_balance, 0)
+                    )}
+                  </Text>
+                  <Text style={styles.totalOutstandingSubtext}>
+                    {(liabilitiesData?.credit_cards || []).filter(c => !c.payment_recorded && c.last_statement_balance > 0).length} card(s) with balance
+                  </Text>
+                </View>
+
+                {/* ── Individual Cards ─────────────────────────────────────────── */}
+                {(() => {
+                  const cards = liabilitiesData?.credit_cards || [];
+                  if (cards.length === 0) {
+                    return (
+                      <View style={styles.emptyState}>
+                        <Ionicons name="card-outline" size={48} color={D.onSurfaceVariant} />
+                        <Text style={styles.emptyText}>No credit card data available</Text>
+                      </View>
+                    );
+                  }
+
+                  // Sort: urgent cards first (due within 10 days), then by due date, then by balance
+                  const sortedCards = [...cards].sort((a, b) => {
+                    const aHasBalance = (a.last_statement_balance || 0) > 0 && !a.payment_recorded;
+                    const bHasBalance = (b.last_statement_balance || 0) > 0 && !b.payment_recorded;
+                    
+                    const aDays = daysUntilDue(a.next_payment_due_date);
+                    const bDays = daysUntilDue(b.next_payment_due_date);
+                    const aUrgent = aHasBalance && aDays <= 10 && aDays >= 0;
+                    const bUrgent = bHasBalance && bDays <= 10 && bDays >= 0;
+                    
+                    // Urgent cards first (due within 10 days), sorted by earliest due date, then highest balance
+                    if (aUrgent && !bUrgent) return -1;
+                    if (!aUrgent && bUrgent) return 1;
+                    if (aUrgent && bUrgent) {
+                      if (aDays !== bDays) return aDays - bDays;
+                      return (b.last_statement_balance || 0) - (a.last_statement_balance || 0);
+                    }
+                    
+                    // Non-urgent: sort by descending current balance
+                    return (b.current_balance || 0) - (a.current_balance || 0);
+                  });
+
+                  return sortedCards.map((card, idx) => (
+                    <CCLiabilityCard key={card.account_id || idx} card={card} />
+                  ));
+                })()}
+              </>
+            )}
           </>
         )}
 
@@ -1472,6 +1740,161 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: D.onSurface,
     fontFamily: 'Manrope',
+  },
+
+  // ── CC Liability Card ───────────────────────────────────────────────────
+  ccLiabilityCard: {
+    backgroundColor: D.cardBg,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+  },
+  ccCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 14,
+  },
+  ccCardAccountName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: D.onSurface,
+    fontFamily: 'Manrope',
+  },
+  ccCardMask: {
+    fontSize: 13,
+    color: D.onSurfaceVariant,
+    fontFamily: 'Inter',
+    marginTop: 2,
+  },
+  ccPaidBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(16,185,129,0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  ccPaidBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#10b981',
+    fontFamily: 'Inter',
+    letterSpacing: 0.5,
+  },
+  ccCardBody: {
+    gap: 12,
+  },
+  ccBalanceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  ccLabel: {
+    fontSize: 11,
+    color: D.onSurfaceVariant,
+    fontFamily: 'Inter',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  ccAmount: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: D.onSurface,
+    fontFamily: 'Manrope',
+  },
+  ccSecondaryAmount: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: D.onSurface,
+    fontFamily: 'Manrope',
+  },
+  ccPaymentRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  ccDueDate: {
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: 'Manrope',
+  },
+  ccAprSection: {
+    marginTop: 4,
+  },
+  ccAprList: {
+    gap: 6,
+  },
+  ccAprItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  ccAprType: {
+    fontSize: 12,
+    color: D.onSurfaceVariant,
+    fontFamily: 'Inter',
+  },
+  ccAprRate: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: D.onSurface,
+    fontFamily: 'Inter',
+  },
+  ccLastPayment: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+  },
+  ccLastPaymentText: {
+    fontSize: 12,
+    color: D.onSurfaceVariant,
+    fontFamily: 'Inter',
+  },
+
+  // ── Total Outstanding Card ───────────────────────────────────────────────
+  totalOutstandingCard: {
+    backgroundColor: D.cardBg,
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    marginBottom: 20,
+    borderLeftWidth: 4,
+    borderLeftColor: D.accentOrange,
+  },
+  totalOutstandingLabel: {
+    fontSize: 12,
+    color: D.onSurfaceVariant,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+    fontFamily: 'Inter',
+    fontWeight: '600',
+  },
+  totalOutstandingAmount: {
+    fontSize: 36,
+    fontWeight: '700',
+    color: D.accentOrange,
+    fontFamily: 'Manrope',
+    marginBottom: 6,
+  },
+  totalOutstandingSubtext: {
+    fontSize: 13,
+    color: D.onSurfaceVariant,
+    fontFamily: 'Inter',
+  },
+
+  // ── Empty State ──────────────────────────────────────────────────────────
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    gap: 12,
   },
 
   // ── Account Card (Summary tab) ────────────────────────────────────────────
