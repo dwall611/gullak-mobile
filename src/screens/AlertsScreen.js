@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api/client';
+import { clearAlertNotification } from '../services/notifications';
 import { colors, spacing, radius, fontSize, fontWeight, fontFamily } from '../utils/theme';
 
 function formatDate(dateStr) {
@@ -129,6 +130,8 @@ export function AlertsScreen() {
       setAlerts(prev => prev.map(a => 
         a.id === alertId ? { ...a, acknowledged: true } : a
       ));
+      // Clear the notification for this alert
+      await clearAlertNotification(alertId);
     } catch (err) {
       console.error('Error acknowledging alert:', err);
       Alert.alert('Error', 'Failed to acknowledge alert');

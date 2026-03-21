@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRoute } from '@react-navigation/native';
 import { colors, spacing, radius, fontSize, fontWeight, fontFamily } from '../utils/theme';
 import { AlertsScreen } from './AlertsScreen';
 import { CategoryRulesScreen } from './CategoryRulesScreen';
@@ -21,7 +22,15 @@ const TABS = [
 
 export function SettingsScreen() {
   const insets = useSafeAreaInsets();
+  const route = useRoute();
   const [activeTab, setActiveTab] = useState('alerts');
+
+  // Handle deep linking via route params
+  useEffect(() => {
+    if (route.params?.initialTab) {
+      setActiveTab(route.params.initialTab);
+    }
+  }, [route.params?.initialTab]);
 
   const ActiveComponent = TABS.find(t => t.id === activeTab)?.Component || AlertsScreen;
 

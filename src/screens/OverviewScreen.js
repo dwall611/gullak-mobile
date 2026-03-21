@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,9 +8,11 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Dimensions,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import Svg, {
   Path,
   Defs,
@@ -21,6 +23,13 @@ import Svg, {
 import { api } from '../api/client';
 import { formatCurrency, formatCompact, getCategoryColor } from '../utils/helpers';
 import { colors, spacing, radius, fontSize, fontWeight, fontFamily } from '../utils/theme';
+import { useAlertContext } from '../contexts/AlertContext';
+import { 
+  requestNotificationPermissions, 
+  scheduleAlertNotification,
+  addNotificationResponseListener,
+  cleanupNotifiedAlerts,
+} from '../services/notifications';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -93,8 +102,51 @@ const MANUAL_RECURRING = [
 ];
 
 // ─── Alert Banner ─────────────────────────────────────────────────────────────
-function AlertBanner({ alerts }) {
-  if (!alerts || alerts.length === 0) return null;
+function AlertBanner({ alerts, onAlertPress, lastUpdated, hasError }) {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (alerts && alerts.length > 0) {
+      // Fade in animation when alerts appear
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [alerts?.length]);
+
+  // Helper to format last updated time
+  const getLastUpdatedText = () => {
+    if (!lastUpdated) return null;
+    const now = new Date();
+    const diffMs = now - lastUpdated;
+    const diffMins = Math.floor(diffMs / 60000);
+    
+    if (diffMins < 1) return 'Updated just now';
+    if (diffMins === 1) return 'Updated 1 min ago';
+    if (diffMins < 60) return `Updated ${diffMins} mins ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours === 1) return 'Updated 1 hour ago';
+    return `Updated ${diffHours} hours ago`;
+  };
+
+  if (!alerts || alerts.length === 0) {
+    // Show error state if there's an error but no alerts
+    if (hasError && lastUpdated) {
+      return (
+        <View style={styles.section}>
+          <View style={styles.alertErrorRow}>
+            <Ionicons name="alert-circle-outline" size={14} color={colors.textMuted} />
+            <Text style={styles.alertErrorText}>
+              Failed to update alerts. {getLastUpdatedText()}
+            </Text>
+          </View>
+        </View>
+      );
+    }
+    return null;
+  }
 
   const severityConfig = {
     info: { icon: 'information-circle-outline', color: colors.infoAccent, bg: colors.infoBg },
@@ -103,20 +155,32 @@ function AlertBanner({ alerts }) {
   };
 
   return (
-    <View style={styles.section}>
+    <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
       {alerts.map((alert, idx) => {
         const cfg = severityConfig[alert.severity] || severityConfig.info;
         return (
-          <View key={alert.id || idx} style={[styles.alertRow, { backgroundColor: cfg.bg, borderColor: cfg.color + '44' }]}>
+          <TouchableOpacity
+            key={alert.id || idx}
+            style={[styles.alertRow, { backgroundColor: cfg.bg, borderColor: cfg.color + '44' }]}
+            onPress={() => onAlertPress && onAlertPress(alert)}
+            activeOpacity={0.7}
+          >
             <Ionicons name={cfg.icon} size={18} color={cfg.color} style={{ marginRight: spacing.sm }} />
             <View style={{ flex: 1 }}>
               <Text style={[styles.alertMsg, { color: colors.text }]}>{alert.message}</Text>
               {alert.rule_name && <Text style={styles.alertRule}>{alert.rule_name}</Text>}
             </View>
-          </View>
+            <Ionicons name="chevron-forward-outline" size={16} color={cfg.color} />
+          </TouchableOpacity>
         );
       })}
-    </View>
+      {hasError && lastUpdated && (
+        <View style={styles.alertFooterStatus}>
+          <Ionicons name="alert-circle-outline" size={12} color={colors.textMuted} />
+          <Text style={styles.alertFooterStatusText}>{getLastUpdatedText()}</Text>
+        </View>
+      )}
+    </Animated.View>
   );
 }
 
@@ -416,6 +480,8 @@ function BudgetConsumption({ budget, spent, timePct, burnPct }) {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export function OverviewScreen() {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
+  const { setUnacknowledgedCount } = useAlertContext();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
@@ -425,6 +491,10 @@ export function OverviewScreen() {
   const [categoryData, setCategoryData] = useState([]);
   const [budgetData, setBudgetData] = useState(null);
   const [forecastData, setForecastData] = useState([]);
+  const [alertsLastUpdated, setAlertsLastUpdated] = useState(null);
+  const [alertsError, setAlertsError] = useState(false);
+  const pollingIntervalRef = useRef(null);
+  const previousAlertIdsRef = useRef(new Set());
 
   const formatDateStr = (d) => {
     const y = d.getFullYear();
@@ -717,16 +787,98 @@ export function OverviewScreen() {
     }
   }, [dates, timePct]);
 
+  // Initial load
   useEffect(() => {
     setLoading(true);
     loadData().finally(() => setLoading(false));
   }, [loadData]);
+
+  // Request notification permissions on mount
+  useEffect(() => {
+    requestNotificationPermissions();
+    cleanupNotifiedAlerts(); // Clean up old notified alerts on app start
+  }, []);
+
+  // Set up notification response listener (navigate to Alerts when tapped)
+  useEffect(() => {
+    const subscription = addNotificationResponseListener((response) => {
+      const screen = response.notification.request.content.data?.screen;
+      if (screen === 'Alerts') {
+        navigation.navigate('Settings', { initialTab: 'alerts' });
+      }
+    });
+
+    return () => subscription.remove();
+  }, [navigation]);
+
+  // Polling for new alerts (every 60 seconds)
+  useEffect(() => {
+    const pollAlerts = async () => {
+      try {
+        const alertHistory = await api.getAlertHistory(10);
+        const unacknowledged = alertHistory.alerts?.filter(a => !a.acknowledged_at) || [];
+        
+        // Update alert state
+        setAlerts(unacknowledged);
+        
+        // Update badge count in context
+        setUnacknowledgedCount(unacknowledged.length);
+
+        // Mark successful update
+        setAlertsLastUpdated(new Date());
+        setAlertsError(false);
+
+        // Detect new alerts and trigger notifications
+        const currentAlertIds = new Set(unacknowledged.map(a => a.id));
+        const previousAlertIds = previousAlertIdsRef.current;
+
+        // Find newly added alerts
+        const newAlerts = unacknowledged.filter(alert => !previousAlertIds.has(alert.id));
+
+        if (newAlerts.length > 0) {
+          console.log(`[OverviewScreen] Detected ${newAlerts.length} new alert(s)`);
+          
+          // Schedule notifications for new alerts
+          for (const alert of newAlerts) {
+            await scheduleAlertNotification(alert);
+          }
+        }
+
+        // Update the previous alert IDs ref
+        previousAlertIdsRef.current = currentAlertIds;
+
+      } catch (err) {
+        console.error('[OverviewScreen] Error polling alerts:', err);
+        setAlertsError(true);
+      }
+    };
+
+    // Poll immediately on mount
+    pollAlerts();
+
+    // Set up polling interval (60 seconds)
+    pollingIntervalRef.current = setInterval(pollAlerts, 60000);
+
+    // Cleanup on unmount
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, [setUnacknowledgedCount]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadData();
     setRefreshing(false);
   }, [loadData]);
+
+  // Handle alert tap - navigate to Alerts screen
+  const handleAlertPress = useCallback(() => {
+    // Navigate to Settings (which has Alerts view)
+    // If Alerts becomes a separate tab, change to: navigation.navigate('Alerts')
+    navigation.navigate('Settings');
+  }, [navigation]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -764,7 +916,12 @@ export function OverviewScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* Alerts */}
-          <AlertBanner alerts={alerts} />
+          <AlertBanner 
+            alerts={alerts} 
+            onAlertPress={handleAlertPress}
+            lastUpdated={alertsLastUpdated}
+            hasError={alertsError}
+          />
 
           {/* CC Payment Due */}
           <PaymentDueBanner liabilities={liabilities} />
@@ -872,6 +1029,32 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     color: colors.textMuted,
     marginTop: 2,
+  },
+  alertErrorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderColor: colors.outline,
+    borderWidth: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    gap: spacing.xs,
+  },
+  alertErrorText: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+  },
+  alertFooterStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: spacing.xs,
+    gap: spacing.xs,
+  },
+  alertFooterStatusText: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
   },
   paymentBanner: {
     flexDirection: 'row',

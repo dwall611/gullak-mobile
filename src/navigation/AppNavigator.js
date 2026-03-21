@@ -9,6 +9,7 @@ import { TransactionsScreen } from '../screens/TransactionsScreen';
 import { SpendingScreen } from '../screens/SpendingScreen';
 import { AnalyticsScreen } from '../screens/AnalyticsScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
+import { AlertProvider, useAlertContext } from '../contexts/AlertContext';
 import { colors, surface, border } from '../utils/theme';
 
 const Tab = createBottomTabNavigator();
@@ -24,50 +25,71 @@ const tabBarStyle = {
   shadowOpacity: 0,
 };
 
+function TabNavigator() {
+  const { unacknowledgedCount } = useAlertContext();
+
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarStyle,
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textMuted,
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '500',
+        },
+        tabBarBadge: route.name === 'Overview' && unacknowledgedCount > 0 ? unacknowledgedCount : undefined,
+        tabBarBadgeStyle: {
+          backgroundColor: colors.expense,
+          color: '#fff',
+          fontSize: 10,
+          minWidth: 18,
+          height: 18,
+          borderRadius: 9,
+          lineHeight: 18,
+          paddingHorizontal: 4,
+        },
+        tabBarIcon: ({ focused, color, size }) => {
+          let iconName;
+          switch (route.name) {
+            case 'Overview':
+              iconName = focused ? 'stats-chart' : 'stats-chart-outline';
+              break;
+            case 'Transactions':
+              iconName = focused ? 'list' : 'list-outline';
+              break;
+            case 'Spending':
+              iconName = focused ? 'wallet' : 'wallet-outline';
+              break;
+            case 'Analytics':
+              iconName = focused ? 'bar-chart' : 'bar-chart-outline';
+              break;
+            case 'Settings':
+              iconName = focused ? 'settings' : 'settings-outline';
+              break;
+            default:
+              iconName = 'ellipse-outline';
+          }
+          return <Ionicons name={iconName} size={size} color={color} />;
+        },
+      })}
+    >
+      <Tab.Screen name="Overview" component={OverviewScreen} />
+      <Tab.Screen name="Transactions" component={TransactionsScreen} />
+      <Tab.Screen name="Spending" component={SpendingScreen} />
+      <Tab.Screen name="Analytics" component={AnalyticsScreen} />
+      <Tab.Screen name="Settings" component={SettingsScreen} />
+    </Tab.Navigator>
+  );
+}
+
 export function AppNavigator() {
   return (
-    <NavigationContainer>
-      <Tab.Navigator
-        screenOptions={({ route }) => ({
-          headerShown: false,
-          tabBarStyle,
-          tabBarActiveTintColor: colors.primary,
-          tabBarInactiveTintColor: colors.textMuted,
-          tabBarLabelStyle: {
-            fontSize: 11,
-            fontWeight: '500',
-          },
-          tabBarIcon: ({ focused, color, size }) => {
-            let iconName;
-            switch (route.name) {
-              case 'Overview':
-                iconName = focused ? 'stats-chart' : 'stats-chart-outline';
-                break;
-              case 'Transactions':
-                iconName = focused ? 'list' : 'list-outline';
-                break;
-              case 'Spending':
-                iconName = focused ? 'wallet' : 'wallet-outline';
-                break;
-              case 'Analytics':
-                iconName = focused ? 'bar-chart' : 'bar-chart-outline';
-                break;
-              case 'Settings':
-                iconName = focused ? 'settings' : 'settings-outline';
-                break;
-              default:
-                iconName = 'ellipse-outline';
-            }
-            return <Ionicons name={iconName} size={size} color={color} />;
-          },
-        })}
-      >
-        <Tab.Screen name="Overview" component={OverviewScreen} />
-        <Tab.Screen name="Transactions" component={TransactionsScreen} />
-        <Tab.Screen name="Spending" component={SpendingScreen} />
-        <Tab.Screen name="Analytics" component={AnalyticsScreen} />
-        <Tab.Screen name="Settings" component={SettingsScreen} />
-      </Tab.Navigator>
-    </NavigationContainer>
+    <AlertProvider>
+      <NavigationContainer>
+        <TabNavigator />
+      </NavigationContainer>
+    </AlertProvider>
   );
 }
