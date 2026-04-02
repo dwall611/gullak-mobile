@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { formatCurrency, formatRelativeDate, getTransactionCategory, getMerchantName, getAccountName } from '../utils/helpers';
+import { formatCurrency, formatRelativeDate, getAccountName } from '../utils/helpers';
 import { colors, spacing, radius, fontSize, fontWeight } from '../utils/theme';
 
 const CATEGORY_ICONS = {
@@ -39,8 +39,10 @@ export function TransactionItem({
   onToggleSelect,
   onLongPress,
 }) {
-  const category = getTransactionCategory(tx);
-  const merchant = getMerchantName(tx);
+  // Use enriched category directly from API response
+  const category = tx.category || tx.override_category || 'Uncategorized';
+  // Use server-resolved merchant display name from API response
+  const merchant = tx.merchant_display_name || 'Unknown';
   const account = getAccountName(tx);
   const isExpense = tx.amount > 0;
   const isIncome = tx.amount < 0;

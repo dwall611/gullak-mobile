@@ -49,47 +49,26 @@ export function formatRelativeDate(dateStr) {
 // Alias for backward compatibility
 export const formatDateShort = formatShortDate;
 
-export const CATEGORY_MAP = {
-  'FOOD_AND_DRINK': 'Food & Dining',
-  'TRANSPORTATION': 'Transportation',
-  'GENERAL_MERCHANDISE': 'Shopping',
-  'ENTERTAINMENT': 'Entertainment',
-  'TRAVEL': 'Travel',
-  'PERSONAL_CARE': 'Personal Care',
-  'HEALTHCARE': 'Healthcare',
-  'RENT': 'Housing',
-  'HOME_IMPROVEMENT': 'Home',
-  'UTILITIES': 'Bills & Utilities',
-  'INCOME': 'Income',
-  'TRANSFER_IN': 'Transfer',
-  'TRANSFER_OUT': 'Transfer',
-  'LOAN_PAYMENTS': 'Credit Card Payments',
-  'BANK_FEES': 'Bank Fees',
-  'GOVERNMENT_AND_NON_PROFIT': 'Government',
-  'SERVICE': 'Services',
-  'GROCERIES': 'Groceries',
-  'AUTO': 'Transportation',
-  'EDUCATION': 'Education',
-  'RENT_AND_UTILITIES': 'Bills & Utilities',
-};
-
+/**
+ * Get the display category for a transaction.
+ * Uses enriched `tx.category` from the API when available,
+ * falls back to override_category for backward compatibility.
+ */
 export function getTransactionCategory(tx) {
+  // Prefer enriched API field
+  if (tx.category && typeof tx.category === 'string') return tx.category;
+  // Fall back to override
   if (tx.override_category) return tx.override_category;
-  if (tx.personal_finance_category) {
-    try {
-      const pfc =
-        typeof tx.personal_finance_category === 'string'
-          ? JSON.parse(tx.personal_finance_category)
-          : tx.personal_finance_category;
-      const mapped = CATEGORY_MAP[pfc?.primary];
-      return mapped || 'Uncategorized';
-    } catch {}
-  }
   return 'Uncategorized';
 }
 
+/**
+ * Get the display merchant name for a transaction.
+ * The API now resolves this server-side as `merchant_display_name`.
+ * Kept for backward compatibility but clients should prefer `tx.merchant_display_name` directly.
+ */
 export function getMerchantName(tx) {
-  return tx.merchant_name || tx.name || 'Unknown';
+  return tx.merchant_display_name || 'Unknown';
 }
 
 export function getAccountName(tx) {

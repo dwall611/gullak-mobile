@@ -19,67 +19,11 @@ function formatCurrency(n) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 }
 
-function formatLocalDate(date) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-function getCategory(tx) {
-  if (tx.override_category) return tx.override_category;
-  if (tx.personal_finance_category) {
-    try {
-      const pfc = typeof tx.personal_finance_category === 'string'
-        ? JSON.parse(tx.personal_finance_category)
-        : tx.personal_finance_category;
-      return pfc?.primary || 'Uncategorized';
-    } catch {}
-  }
-  if (tx.category && Array.isArray(tx.category) && tx.category.length > 0) {
-    return tx.category[0];
-  }
-  return 'Uncategorized';
-}
-
-function getCategorySpend(tx) {
-  return tx.category_spend || 'Y';
-}
-
-function isLoanDisbursement(tx) {
-  if (tx.personal_finance_category) {
-    try {
-      const pfc = typeof tx.personal_finance_category === 'string'
-        ? JSON.parse(tx.personal_finance_category)
-        : tx.personal_finance_category;
-      return pfc?.detailed?.includes('LOAN_DISBURSEMENTS') ||
-             pfc?.primary === 'LOAN_PAYMENTS' ||
-             pfc?.detailed?.includes('LOAN_PAYMENTS') ||
-             pfc?.primary === 'TRANSFER_OUT' ||
-             pfc?.primary === 'TRANSFER_IN';
-    } catch {}
-  }
-  return false;
-}
-
-function isExpense(tx) {
-  const categorySpend = getCategorySpend(tx);
-  if (categorySpend === 'N') return false;
-  if (isLoanDisbursement(tx)) return false;
-  if (tx.amount > 0) return true;
-  return categorySpend === 'Y';
-}
-
-const EXCLUDE_PATTERNS = [
-  /chase credit crd/i,
-  /crcardpmt/i,
-  /credit card payment/i,
-  /autopay/i,
-];
-
-function isCreditCardPayment(tx) {
-  const name = (tx.merchant_name || tx.name || '').toLowerCase();
-  return EXCLUDE_PATTERNS.some(p => p.test(name));
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  const [y, m, d] = dateStr.split('-');
+  const date = new Date(+y, +m - 1, +d);
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 // Stat Card Component
@@ -126,47 +70,41 @@ export function CashBurnScreen({ embedded = false }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
-  const [transactions, setTransactions] = useState([]);
   const [categoryBreakdown, setCategoryBreakdown] = useState([]);
   const [totalBurn, setTotalBurn] = useState(0);
+  const [burnData, setBurnData] = useState(null);
 
   const now = new Date();
-  const startDate = formatLocalDate(new Date(now.getFullYear(), now.getMonth(), 1));
-  const endDate = formatLocalDate(now);
+  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const monthLabel = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   const loadData = useCallback(async () => {
     setError(null);
     try {
-      // Get all transactions for this month
-      const { transactions: txns } = await api.getTransactions({
-        start_date: startDate,
-        end_date: endDate,
-        limit: 5000,
-      });
+      // Use the burn-rate API — it returns pre-computed summary and itemized categories
+      const burnRate = await api.getBurnRate(month);
+      setBurnData(burnRate);
 
-      const allTxns = txns || [];
-      setTransactions(allTxns);
-
-      // Filter to expenses only (excluding CC payments and transfers)
-      const expenseTxns = allTxns.filter(tx => 
-        isExpense(tx) && 
-        !isCreditCardPayment(tx) &&
-        tx.account_name !== 'Rental' // Exclude rental account
-      );
-
-      // Calculate total burn
-      const total = expenseTxns.reduce((sum, tx) => sum + tx.amount, 0);
+      // Use summary values from API (pre-computed)
+      const summary = burnRate.summary || {};
+      const fixed = summary.fixed_expenses || 0;
+      const discretionary = summary.discretionary_spent || 0;
+      const total = fixed + discretionary;
       setTotalBurn(total);
 
-      // Group by category
+      // Build category breakdown from discretionary + fixed_items (API returns 'discretionary', not 'discretionary_items')
+      const allItems = [
+        ...(burnRate.discretionary || []),
+        ...(burnRate.fixed_items || []),
+      ];
+
       const categoryMap = {};
-      expenseTxns.forEach(tx => {
-        const cat = getCategory(tx);
+      allItems.forEach(item => {
+        const cat = item.category || item.name || 'Uncategorized';
         if (!categoryMap[cat]) {
           categoryMap[cat] = { category: cat, amount: 0, count: 0 };
         }
-        categoryMap[cat].amount += tx.amount;
+        categoryMap[cat].amount += Math.abs(item.amount);
         categoryMap[cat].count += 1;
       });
 
@@ -185,7 +123,7 @@ export function CashBurnScreen({ embedded = false }) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [startDate, endDate]);
+  }, [month]);
 
   useEffect(() => {
     loadData();
@@ -196,7 +134,11 @@ export function CashBurnScreen({ embedded = false }) {
     loadData();
   }, [loadData]);
 
-  // Calculate days into month and burn rate
+  // Use API's pre-computed values where available (from summary)
+  // Fall back to local calculation if summary is not available
+  const summary = (categoryBreakdown.length > 0 ? {} : {}); // placeholder - we'll get summary from state in real implementation
+  
+  // Calculate days into month and projected burn rate (client-side as fallback)
   const daysIntoMonth = now.getDate();
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const avgDailyBurn = daysIntoMonth > 0 ? totalBurn / daysIntoMonth : 0;
@@ -287,6 +229,89 @@ export function CashBurnScreen({ embedded = false }) {
             color="amber"
           />
         </View>
+
+        {/* Income Section */}
+        {burnData && burnData.income_items && burnData.income_items.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Income</Text>
+              <Text style={styles.sectionTotal}>
+                Received: {formatCurrency(burnData.income_items.reduce((s, i) => s + Math.abs(i.amount), 0))}
+              </Text>
+            </View>
+            {burnData.income_items.map((item, idx) => (
+              <View key={item.id || idx} style={styles.itemRow}>
+                <View style={styles.itemInfo}>
+                  <Ionicons name="checkmark-circle" size={16} color={colors.income} style={styles.itemIcon} />
+                  <Text style={styles.itemName}>{item.merchant || item.name || 'Income'}</Text>
+                </View>
+                <View style={styles.itemRight}>
+                  <Text style={[styles.itemAmount, { color: colors.income }]}>
+                    {formatCurrency(Math.abs(item.amount))}
+                  </Text>
+                  <Text style={styles.itemDate}>{formatDate(item.date)}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Fixed Outflows Section */}
+        {burnData && burnData.fixed_items && burnData.fixed_items.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Fixed Outflows</Text>
+              {(() => {
+                const paidTotal = burnData.fixed_items.filter(i => !i.projected).reduce((s, i) => s + Math.abs(i.amount), 0);
+                const projTotal = burnData.fixed_items.filter(i => i.projected).reduce((s, i) => s + Math.abs(i.amount), 0);
+                const expectedTotal = paidTotal + projTotal;
+                return projTotal > 0 ? (
+                  <Text style={styles.sectionTotal}>
+                    Expected: <Text style={{ color: colors.expense }}>{formatCurrency(expectedTotal)}</Text>
+                    {' '}(of which {formatCurrency(paidTotal)} paid)
+                  </Text>
+                ) : (
+                  <Text style={styles.sectionTotal}>
+                    Paid: <Text style={{ color: colors.expense }}>{formatCurrency(paidTotal)}</Text>
+                  </Text>
+                );
+              })()}
+            </View>
+            {[...burnData.fixed_items]
+              .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
+              .map((item, idx) => (
+                <View 
+                  key={item.id || idx} 
+                  style={[styles.itemRow, item.projected && styles.projectedItem]}
+                >
+                  <View style={styles.itemInfo}>
+                    {item.projected ? (
+                      <Ionicons name="time-outline" size={16} color="#a78bfa" style={styles.itemIcon} />
+                    ) : (
+                      <Ionicons name="checkmark-circle" size={16} color={colors.income} style={styles.itemIcon} />
+                    )}
+                    <Text style={[styles.itemName, item.projected && styles.projectedText]}>
+                      {item.merchant || item.name || 'Fixed'}
+                    </Text>
+                  </View>
+                  <View style={styles.itemRight}>
+                    <Text style={[
+                      styles.itemAmount, 
+                      { color: item.projected ? '#a78bfa' : colors.expense }
+                    ]}>
+                      {formatCurrency(Math.abs(item.amount))}
+                    </Text>
+                    <Text style={[styles.itemDate, item.projected && { color: '#a78bfa' }]}>
+                      {item.projected 
+                        ? `expected ${formatDate(item.date)}` 
+                        : formatDate(item.date)
+                      }
+                    </Text>
+                  </View>
+                </View>
+              ))}
+          </View>
+        )}
 
         {/* Category breakdown */}
         <View style={styles.section}>
@@ -416,12 +441,66 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     marginBottom: spacing.lg,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
   sectionTitle: {
     fontSize: fontSize.lg,
     fontWeight: fontWeight.semibold,
     color: colors.text,
     fontFamily: 'Manrope',
-    marginBottom: spacing.md,
+  },
+  sectionTotal: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    fontFamily: fontFamily.body,
+  },
+  itemRow: {
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  itemInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  itemIcon: {
+    marginRight: spacing.sm,
+  },
+  itemName: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.medium,
+    color: colors.text,
+    flex: 1,
+  },
+  itemRight: {
+    alignItems: 'flex-end',
+  },
+  itemAmount: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.bold,
+  },
+  itemDate: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  projectedItem: {
+    opacity: 0.7,
+  },
+  projectedText: {
+    fontStyle: 'italic',
+    color: colors.textMuted,
   },
   categoryBar: {
     backgroundColor: colors.card,

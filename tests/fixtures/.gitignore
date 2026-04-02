@@ -1,0 +1,6 @@
+# Ignore raw fixture data (contains real production data)
+*.json
+
+# But keep golden files (expected output for tests)
+!.golden/
+!.golden/*.golden.json

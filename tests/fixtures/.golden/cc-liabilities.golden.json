@@ -1,0 +1,251 @@
+{
+  "captured_at": "2026-04-01T03:55:13.690Z",
+  "source_client": "gullak-mobile v3.3.0",
+  "source_logic": "OverviewScreen.js (PaymentDueBanner)",
+  "fixtures_used": [
+    "cc-liabilities.json"
+  ],
+  "result": {
+    "credit_cards": [
+      {
+        "account_id": "k1xpKb5RqJig4zmnNA7jCNr3Oy0PLVUZwzpjzE",
+        "account_name": "United",
+        "mask": "3590",
+        "last_statement_balance": null,
+        "current_balance": 0,
+        "last_statement_issue_date": "2026-02-01",
+        "minimum_payment_amount": null,
+        "next_payment_due_date": "2026-03-26",
+        "aprs": [
+          {
+            "apr_type": "purchase_apr",
+            "apr_percentage": 26.99,
+            "balance_subject_to_apr": null
+          },
+          {
+            "apr_type": "cash_apr",
+            "apr_percentage": 28.49,
+            "balance_subject_to_apr": null
+          }
+        ],
+        "last_payment_amount": 2560.04,
+        "last_payment_date": "2025-10-19",
+        "credit_limit": 10000,
+        "is_overdue": false,
+        "payment_recorded": false,
+        "updated_at": "2026-04-01T03:43:28.922Z",
+        "days_until_due": null,
+        "urgency": null,
+        "is_urgent": false
+      },
+      {
+        "account_id": "8edLXZeqJpf67gpVPeX8u7344RDdgDHk7R6AMy",
+        "account_name": "PayPal Credit Card",
+        "mask": "2950",
+        "last_statement_balance": null,
+        "current_balance": 0,
+        "last_statement_issue_date": "2025-12-07",
+        "minimum_payment_amount": 30,
+        "next_payment_due_date": "2026-04-10",
+        "aprs": [],
+        "last_payment_amount": null,
+        "last_payment_date": null,
+        "credit_limit": 10000,
+        "is_overdue": false,
+        "payment_recorded": false,
+        "updated_at": "2026-04-01T03:43:29.890Z",
+        "days_until_due": null,
+        "urgency": null,
+        "is_urgent": false
+      },
+      {
+        "account_id": "P7e3KrMqRwHw4OmXBXRMhmgME1dvNVH5QqKXoz",
+        "account_name": "Platinum Card®",
+        "mask": "1008",
+        "last_statement_balance": 985.47,
+        "current_balance": 0,
+        "last_statement_issue_date": "2026-03-18",
+        "minimum_payment_amount": 40,
+        "next_payment_due_date": "2026-04-12",
+        "aprs": [
+          {
+            "apr_type": "purchase_apr",
+            "apr_percentage": 29.99,
+            "balance_subject_to_apr": null
+          }
+        ],
+        "last_payment_amount": 679.78,
+        "last_payment_date": "2026-03-07",
+        "credit_limit": null,
+        "is_overdue": false,
+        "payment_recorded": false,
+        "updated_at": "2026-04-01T03:43:29.343Z",
+        "days_until_due": 12,
+        "urgency": "medium",
+        "is_urgent": false
+      },
+      {
+        "account_id": "EMg7EoJMjghMYvn7L4VjFpNkNeZNp8U5LJ9xL",
+        "account_name": "Bilt Palladium Card",
+        "mask": "8984",
+        "last_statement_balance": 7682.2,
+        "current_balance": 1943.37,
+        "last_statement_issue_date": "2026-03-17",
+        "minimum_payment_amount": 68.25,
+        "next_payment_due_date": "2026-04-12",
+        "aprs": 10,
+        "last_payment_amount": null,
+        "last_payment_date": null,
+        "credit_limit": 35000,
+        "is_overdue": false,
+        "payment_recorded": false,
+        "updated_at": "2026-03-19T04:32:26.989Z",
+        "days_until_due": 12,
+        "urgency": "medium",
+        "is_urgent": false
+      },
+      {
+        "account_id": "EzQmqOavY3iJZV1noZ9NtayO87aaENiQapL7x",
+        "account_name": "Macy's Credit Card",
+        "mask": "3172",
+        "last_statement_balance": 10.94,
+        "current_balance": 0,
+        "last_statement_issue_date": "2026-03-17",
+        "minimum_payment_amount": 10.94,
+        "next_payment_due_date": "2026-04-13",
+        "aprs": [],
+        "last_payment_amount": null,
+        "last_payment_date": "2026-03-07",
+        "credit_limit": 3300,
+        "is_overdue": false,
+        "payment_recorded": false,
+        "updated_at": "2026-04-01T03:43:29.623Z",
+        "days_until_due": 13,
+        "urgency": "medium",
+        "is_urgent": false
+      },
+      {
+        "account_id": "L60xrEnvV5c9AqNnjyMnSRxYbwOJz6UPj8ona",
+        "account_name": "My Best Buy® Visa® Card",
+        "mask": "5076",
+        "last_statement_balance": null,
+        "current_balance": 0,
+        "last_statement_issue_date": "2025-11-18",
+        "minimum_payment_amount": null,
+        "next_payment_due_date": "2026-04-13",
+        "aprs": [],
+        "last_payment_amount": 2259,
+        "last_payment_date": "2025-11-14",
+        "credit_limit": 6500,
+        "is_overdue": false,
+        "payment_recorded": false,
+        "updated_at": "2026-04-01T03:43:30.142Z",
+        "days_until_due": null,
+        "urgency": null,
+        "is_urgent": false
+      },
+      {
+        "account_id": "3rRwQqP1poIBPOQp6edyuMmrgLX1YJSMZ3zx37",
+        "account_name": "Freedom",
+        "mask": "1071",
+        "last_statement_balance": 1107.08,
+        "current_balance": 0,
+        "last_statement_issue_date": "2026-03-28",
+        "minimum_payment_amount": 40,
+        "next_payment_due_date": "2026-04-25",
+        "aprs": [
+          {
+            "apr_type": "purchase_apr",
+            "apr_percentage": 18.24,
+            "balance_subject_to_apr": null
+          },
+          {
+            "apr_type": "cash_apr",
+            "apr_percentage": 28.49,
+            "balance_subject_to_apr": null
+          }
+        ],
+        "last_payment_amount": 4309.03,
+        "last_payment_date": "2026-03-18",
+        "credit_limit": 30000,
+        "is_overdue": false,
+        "payment_recorded": false,
+        "updated_at": "2026-04-01T03:43:28.920Z",
+        "days_until_due": 25,
+        "urgency": "low",
+        "is_urgent": false
+      },
+      {
+        "account_id": "qm1pXxVOALCKMPAVDBw8HV5KwgAvjNU5Zmxkm1",
+        "account_name": "Amazon",
+        "mask": "4220",
+        "last_statement_balance": 1594.89,
+        "current_balance": 56.019999999999996,
+        "last_statement_issue_date": "2026-03-28",
+        "minimum_payment_amount": 35,
+        "next_payment_due_date": "2026-04-25",
+        "aprs": [
+          {
+            "apr_type": "purchase_apr",
+            "apr_percentage": 17.74,
+            "balance_subject_to_apr": null
+          },
+          {
+            "apr_type": "cash_apr",
+            "apr_percentage": 28.49,
+            "balance_subject_to_apr": null
+          }
+        ],
+        "last_payment_amount": 1640.82,
+        "last_payment_date": "2026-03-18",
+        "credit_limit": 27000,
+        "is_overdue": false,
+        "payment_recorded": false,
+        "updated_at": "2026-04-01T03:43:28.922Z",
+        "days_until_due": 25,
+        "urgency": "low",
+        "is_urgent": false
+      },
+      {
+        "account_id": "yaXpO6d5JKUjMv0YXgEptAogEb1qmwsP1eDMeD",
+        "account_name": "Reserve",
+        "mask": "7488",
+        "last_statement_balance": 23888.33,
+        "current_balance": 98.36,
+        "last_statement_issue_date": "2026-03-28",
+        "minimum_payment_amount": 238,
+        "next_payment_due_date": "2026-04-25",
+        "aprs": [
+          {
+            "apr_type": "purchase_apr",
+            "apr_percentage": 23.49,
+            "balance_subject_to_apr": null
+          },
+          {
+            "apr_type": "cash_apr",
+            "apr_percentage": 28.49,
+            "balance_subject_to_apr": null
+          }
+        ],
+        "last_payment_amount": 6961.09,
+        "last_payment_date": "2026-03-18",
+        "credit_limit": 40000,
+        "is_overdue": false,
+        "payment_recorded": false,
+        "updated_at": "2026-04-01T03:43:28.922Z",
+        "days_until_due": 25,
+        "urgency": "low",
+        "is_urgent": false
+      }
+    ],
+    "summary": {
+      "total_cards": 9,
+      "total_balance": 35268.91,
+      "urgent_count": 0
+    }
+  },
+  "validation": {
+    "has_urgent_cards": false,
+    "all_dates_valid": true
+  }
+}

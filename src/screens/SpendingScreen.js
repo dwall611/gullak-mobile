@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,12 +10,16 @@ import {
   TextInput,
   Modal,
   Dimensions,
+  Alert,
+  Pressable,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 import { api, clearCache } from '../api/client';
-import { formatCurrency } from '../utils/helpers';
+import { formatCurrency, formatDate, formatShortDate } from '../utils/helpers';
 import { surface, text, brand, border, fontFamily, fontSize as fz, fontWeight as fw, barColors, semantic } from '../theme/designTokens';
 
 const screenWidth = Dimensions.get('window').width;
@@ -39,25 +43,44 @@ const D = {
 
 // ─── Category config (icon + color per category) ──────────────────────────────
 const CATEGORY_CONFIG = {
-  'Travel':          { color: '#3b82f6', icon: 'airplane-outline' },
-  'Bank Fees':       { color: '#10b981', icon: 'card-outline' },
-  'Shopping':        { color: '#f59e0b', icon: 'bag-handle-outline' },
-  'Food & Dining':   { color: '#f43f5e', icon: 'restaurant-outline' },
-  'Transportation':  { color: '#8b5cf6', icon: 'car-outline' },
-  'Cash Payment':    { color: '#ec4899', icon: 'cash-outline' },
+  'Travel':            { color: '#3b82f6', icon: 'airplane-outline' },
+  'Bank Fees':         { color: '#10b981', icon: 'card-outline' },
+  'Shopping':          { color: '#f59e0b', icon: 'bag-handle-outline' },
+  'Food & Dining':     { color: '#f43f5e', icon: 'restaurant-outline' },
+  'Transportation':    { color: '#8b5cf6', icon: 'car-outline' },
+  'Cash Payment':      { color: '#ec4899', icon: 'cash-outline' },
   'Bills & Utilities': { color: '#06b6d4', icon: 'flash-outline' },
-  'Entertainment':   { color: '#f97316', icon: 'film-outline' },
-  'Healthcare':      { color: '#84cc16', icon: 'medkit-outline' },
-  'Housing':         { color: '#6366f1', icon: 'home-outline' },
-  'Groceries':       { color: '#10b981', icon: 'cart-outline' },
-  'Personal Care':   { color: '#ec4899', icon: 'heart-outline' },
-  'Loan Payments':   { color: '#ef4444', icon: 'trending-down-outline' },
-  'Education':       { color: '#f59e0b', icon: 'school-outline' },
-  'Services':        { color: '#a78bfa', icon: 'construct-outline' },
-  'Government':      { color: '#64748b', icon: 'business-outline' },
+  'Entertainment':     { color: '#f97316', icon: 'film-outline' },
+  'Healthcare':        { color: '#84cc16', icon: 'medkit-outline' },
+  'Housing':           { color: '#6366f1', icon: 'home-outline' },
+  'Groceries':         { color: '#10b981', icon: 'cart-outline' },
+  'Personal Care':     { color: '#ec4899', icon: 'heart-outline' },
+  'Loan Payments':     { color: '#ef4444', icon: 'trending-down-outline' },
+  'Education':         { color: '#f59e0b', icon: 'school-outline' },
+  'Services':          { color: '#a78bfa', icon: 'construct-outline' },
+  'Government':        { color: '#64748b', icon: 'business-outline' },
 };
 
 const DEFAULT_CATEGORY_CONFIG = { color: '#6b7280', icon: 'ellipsis-horizontal-outline' };
+
+// ─── Frequency display helpers ────────────────────────────────────────────────
+const FREQ_DISPLAY = {
+  weekly: 'Weekly',
+  bi_weekly: 'Bi-weekly',
+  'bi-weekly': 'Bi-weekly',
+  monthly: 'Monthly',
+  bi_monthly: 'Bi-monthly',
+  quarterly: 'Quarterly',
+  yearly: 'Yearly',
+  custom: 'Custom',
+  // Legacy values
+  Weekly: 'Weekly',
+  'Bi-weekly': 'Bi-weekly',
+  Monthly: 'Monthly',
+  Quarterly: 'Quarterly',
+  Yearly: 'Yearly',
+  Custom: 'Custom',
+};
 
 // ─── Bar label formatter (compact, no decimals) ───────────────────────────────
 function formatBarLabel(amount) {
@@ -70,82 +93,6 @@ const CATEGORY_COLORS_FALLBACK = [
   '#3b82f6', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6',
   '#ec4899', '#06b6d4', '#f97316', '#84cc16', '#6366f1',
 ];
-
-// ─── Category name mapping ────────────────────────────────────────────────────
-const CATEGORY_MAP = {
-  'FOOD_AND_DRINK':           'Food & Dining',
-  'TRANSPORTATION':           'Transportation',
-  'GENERAL_MERCHANDISE':      'Shopping',
-  'ENTERTAINMENT':            'Entertainment',
-  'TRAVEL':                   'Travel',
-  'PERSONAL_CARE':            'Personal Care',
-  'HEALTHCARE':               'Healthcare',
-  'RENT':                     'Housing',
-  'HOME_IMPROVEMENT':         'Home',
-  'UTILITIES':                'Bills & Utilities',
-  'INCOME':                   'Income',
-  'TRANSFER_IN':              'Transfer',
-  'TRANSFER_OUT':             'Transfer',
-  'LOAN_PAYMENTS':            'Loan Payments',
-  'BANK_FEES':                'Bank Fees',
-  'GOVERNMENT_AND_NON_PROFIT': 'Government',
-  'SERVICE':                  'Services',
-  'GROCERIES':                'Groceries',
-  'AUTO':                     'Transportation',
-  'EDUCATION':                'Education',
-  'UNCATEGORIZED':            'Uncategorized',
-  'RENT_AND_UTILITIES':       'Bills & Utilities',
-};
-
-const formatCategoryName = (rawCategory) => {
-  if (!rawCategory) return 'Uncategorized';
-  return CATEGORY_MAP[rawCategory] || 'Uncategorized';
-};
-
-// ─── Transaction helpers ──────────────────────────────────────────────────────
-function getCategory(tx) {
-  if (tx.override_category) return tx.override_category;
-  if (tx.personal_finance_category) {
-    try {
-      const pfc = typeof tx.personal_finance_category === 'string'
-        ? JSON.parse(tx.personal_finance_category)
-        : tx.personal_finance_category;
-      return formatCategoryName(pfc?.primary);
-    } catch {}
-  }
-  if (tx.category && Array.isArray(tx.category) && tx.category.length > 0) {
-    return formatCategoryName(tx.category[0]);
-  }
-  return 'Uncategorized';
-}
-
-function getCategorySpend(tx) {
-  return tx.category_spend || 'Y';
-}
-
-function isLoanDisbursement(tx) {
-  if (tx.personal_finance_category) {
-    try {
-      const pfc = typeof tx.personal_finance_category === 'string'
-        ? JSON.parse(tx.personal_finance_category)
-        : tx.personal_finance_category;
-      return pfc?.detailed?.includes('LOAN_DISBURSEMENTS') ||
-             pfc?.primary === 'LOAN_PAYMENTS' ||
-             pfc?.detailed?.includes('LOAN_PAYMENTS') ||
-             pfc?.primary === 'TRANSFER_OUT' ||
-             pfc?.primary === 'TRANSFER_IN';
-    } catch {}
-  }
-  return false;
-}
-
-function isExpense(tx) {
-  const categorySpend = getCategorySpend(tx);
-  if (categorySpend === 'N') return false;
-  if (isLoanDisbursement(tx)) return false;
-  if (tx.amount > 0) return true;
-  return categorySpend === 'Y';
-}
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 function formatLocalDate(date) {
@@ -261,23 +208,6 @@ function daysUntilDue(dateStr) {
 function formatAprType(type) {
   if (!type) return 'APR';
   return type.replace(/_/g, ' ').replace(/\w\S*/g, txt => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
-}
-
-function computePeakDay(transactions) {
-  const dayMap = {};
-  transactions.forEach(tx => {
-    if (isExpense(tx)) {
-      const date = tx.date;
-      if (!dayMap[date]) dayMap[date] = 0;
-      dayMap[date] += Math.abs(tx.amount);
-    }
-  });
-  let peakDate = null;
-  let peakAmount = 0;
-  Object.entries(dayMap).forEach(([date, amount]) => {
-    if (amount > peakAmount) { peakAmount = amount; peakDate = date; }
-  });
-  return { peakDate, peakAmount };
 }
 
 function getAvailableMonths() {
@@ -548,6 +478,262 @@ function CCLiabilityCard({ card, style }) {
   );
 }
 
+// ─── Recurring Rule Form Modal ─────────────────────────────────────────────────
+const FREQUENCY_OPTIONS = [
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'bi_weekly', label: 'Bi-weekly' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'bi_monthly', label: 'Bi-monthly' },
+  { value: 'quarterly', label: 'Quarterly' },
+  { value: 'yearly', label: 'Yearly' },
+];
+
+const NEEDS_DAY_OF_MONTH = ['monthly', 'quarterly', 'yearly'];
+
+function RecurringRuleFormModal({ visible, rule, accounts, categories, onSave, onCancel }) {
+  const [form, setForm] = useState(() => initFormData(rule));
+  const [saving, setSaving] = useState(false);
+
+  function initFormData(r) {
+    if (!r) {
+      return {
+        name: '',
+        match_pattern: '',
+        account_id: '',
+        amount: '',
+        frequency: 'monthly',
+        day_of_month: '',
+        category_id: '',
+        is_subscription: false,
+      };
+    }
+    return {
+      name: r.merchant_name || r.name || '',
+      match_pattern: r.match_pattern || r.name_pattern || r.merchant_name || '',
+      account_id: r.account_id || '',
+      amount: r.amount != null ? String(Math.abs(r.amount)) : '',
+      frequency: (r.frequency || 'monthly').toLowerCase().replace('-', '_').replace(' ', '_'),
+      day_of_month: r.day_of_month != null ? String(r.day_of_month) : '',
+      category_id: r.category_id != null ? String(r.category_id) : '',
+      is_subscription: !!r.is_subscription,
+    };
+  }
+
+  useEffect(() => {
+    setForm(initFormData(rule));
+  }, [rule]);
+
+  const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
+
+  const handleSubmit = async () => {
+    if (!form.match_pattern.trim()) {
+      Alert.alert('Validation Error', 'Pattern is required');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const payload = {
+        merchant_name: form.name || form.match_pattern,
+        name_pattern: form.name || form.match_pattern,
+        match_pattern: form.match_pattern.trim(),
+        account_id: form.account_id || null,
+        amount: form.amount !== '' ? parseFloat(form.amount) : null,
+        frequency: form.frequency,
+        day_of_month: NEEDS_DAY_OF_MONTH.includes(form.frequency) && form.day_of_month
+          ? parseInt(form.day_of_month)
+          : null,
+        category_id: form.category_id ? parseInt(form.category_id) : null,
+        is_subscription: form.is_subscription ? 1 : 0,
+      };
+      await onSave(payload);
+    } catch (err) {
+      // onSave handles alerts
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const showDay = NEEDS_DAY_OF_MONTH.includes(form.frequency);
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={onCancel}
+    >
+      <View style={styles.formModal}>
+        <View style={styles.formHeader}>
+          <Text style={styles.formTitle}>{rule ? 'Edit Rule' : 'New Recurring Rule'}</Text>
+          <TouchableOpacity onPress={onCancel} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Ionicons name="close" size={24} color={D.onSurface} />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={styles.formBody} contentContainerStyle={styles.formContent}>
+          {/* Name */}
+          <View style={styles.formField}>
+            <Text style={styles.formLabel}>Rule Name</Text>
+            <TextInput
+              style={styles.formInput}
+              value={form.name}
+              onChangeText={v => set('name', v)}
+              placeholder="e.g., Netflix Subscription"
+              placeholderTextColor={D.onSurfaceVariant}
+            />
+          </View>
+
+          {/* Pattern */}
+          <View style={styles.formField}>
+            <Text style={styles.formLabel}>Pattern *</Text>
+            <TextInput
+              style={styles.formInput}
+              value={form.match_pattern}
+              onChangeText={v => set('match_pattern', v)}
+              placeholder="e.g., *NETFLIX* or SPOTIFY"
+              placeholderTextColor={D.onSurfaceVariant}
+            />
+            <Text style={styles.formHint}>Use * as wildcard</Text>
+          </View>
+
+          {/* Account */}
+          <View style={styles.formField}>
+            <Text style={styles.formLabel}>Account</Text>
+            <View style={styles.formPicker}>
+              <Text style={styles.formPickerText}>
+                {accounts.find(a => String(a.id) === form.account_id)?.name || 'Any account'}
+              </Text>
+              <Ionicons name="chevron-down" size={16} color={D.onSurfaceVariant} />
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+              <TouchableOpacity
+                style={[styles.chip, !form.account_id && styles.chipActive]}
+                onPress={() => set('account_id', '')}
+              >
+                <Text style={[styles.chipText, !form.account_id && styles.chipTextActive]}>Any</Text>
+              </TouchableOpacity>
+              {accounts.map(acc => (
+                <TouchableOpacity
+                  key={acc.id}
+                  style={[styles.chip, form.account_id === String(acc.id) && styles.chipActive]}
+                  onPress={() => set('account_id', String(acc.id))}
+                >
+                  <Text style={[styles.chipText, form.account_id === String(acc.id) && styles.chipTextActive]} numberOfLines={1}>
+                    {acc.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          {/* Amount */}
+          <View style={styles.formField}>
+            <Text style={styles.formLabel}>Expected Amount</Text>
+            <TextInput
+              style={styles.formInput}
+              value={form.amount}
+              onChangeText={v => set('amount', v)}
+              placeholder="e.g., 15.99"
+              placeholderTextColor={D.onSurfaceVariant}
+              keyboardType="decimal-pad"
+            />
+          </View>
+
+          {/* Frequency */}
+          <View style={styles.formField}>
+            <Text style={styles.formLabel}>Frequency *</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+              {FREQUENCY_OPTIONS.map(opt => (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[styles.chip, form.frequency === opt.value && styles.chipActive]}
+                  onPress={() => set('frequency', opt.value)}
+                >
+                  <Text style={[styles.chipText, form.frequency === opt.value && styles.chipTextActive]}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          {/* Day of Month */}
+          {showDay && (
+            <View style={styles.formField}>
+              <Text style={styles.formLabel}>Day of Month</Text>
+              <TextInput
+                style={[styles.formInput, { width: 100 }]}
+                value={form.day_of_month}
+                onChangeText={v => set('day_of_month', v)}
+                placeholder="1-31"
+                placeholderTextColor={D.onSurfaceVariant}
+                keyboardType="number-pad"
+              />
+            </View>
+          )}
+
+          {/* Category */}
+          <View style={styles.formField}>
+            <Text style={styles.formLabel}>Category</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+              <TouchableOpacity
+                style={[styles.chip, !form.category_id && styles.chipActive]}
+                onPress={() => set('category_id', '')}
+              >
+                <Text style={[styles.chipText, !form.category_id && styles.chipTextActive]}>None</Text>
+              </TouchableOpacity>
+              {categories.map(cat => (
+                <TouchableOpacity
+                  key={cat.id}
+                  style={[styles.chip, form.category_id === String(cat.id) && styles.chipActive]}
+                  onPress={() => set('category_id', String(cat.id))}
+                >
+                  <Text style={[styles.chipText, form.category_id === String(cat.id) && styles.chipTextActive]} numberOfLines={1}>
+                    {cat.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          {/* Subscription toggle */}
+          <TouchableOpacity
+            style={styles.toggleRow}
+            onPress={() => set('is_subscription', !form.is_subscription)}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name={form.is_subscription ? 'checkbox' : 'square-outline'}
+              size={22}
+              color={form.is_subscription ? brand.primary : D.onSurfaceVariant}
+            />
+            <Text style={styles.toggleText}>Mark as subscription service</Text>
+          </TouchableOpacity>
+        </ScrollView>
+
+        {/* Footer */}
+        <View style={styles.formFooter}>
+          <TouchableOpacity style={styles.formCancelBtn} onPress={onCancel}>
+            <Text style={styles.formCancelText}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.formSaveBtn, saving && styles.formSaveBtnDisabled]}
+            onPress={handleSubmit}
+            disabled={saving}
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.formSaveText}>{rule ? 'Update' : 'Save'}</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function SpendingScreen() {
   const insets     = useSafeAreaInsets();
@@ -577,6 +763,19 @@ export function SpendingScreen() {
   const [liabilitiesData, setLiabilitiesData] = useState(null);
   const [liabilitiesLoading, setLiabilitiesLoading] = useState(false);
 
+  // ── Recurring State ──────────────────────────────────────────────────────
+  const [recurringRules, setRecurringRules] = useState([]);
+  const [recurringStats, setRecurringStats] = useState(null);
+  const [recurringLoading, setRecurringLoading] = useState(false);
+  const [recurringFilter, setRecurringFilter] = useState('all'); // all | active | paused | auto
+  const [recurringSearch, setRecurringSearch] = useState('');
+  const [showRecurringForm, setShowRecurringForm] = useState(false);
+  const [editingRule, setEditingRule] = useState(null);
+  const [togglingRuleId, setTogglingRuleId] = useState(null);
+  const [deletingRuleId, setDeletingRuleId] = useState(null);
+  const [accounts, setAccounts] = useState([]);
+  const [categories, setCategories] = useState([]);
+
   const availableMonths = useMemo(() => getAvailableMonths(), []);
 
   // ── Derived values ────────────────────────────────────────────────────────
@@ -592,16 +791,10 @@ export function SpendingScreen() {
     return ((totalSpend - previousTotal) / previousTotal) * 100;
   }, [totalSpend, previousTotal]);
 
-  const { peakDate, peakAmount } = useMemo(
-    () => computePeakDay(allTransactions),
-    [allTransactions]
-  );
-
-  const peakDayLabel = useMemo(() => {
-    if (!peakDate) return null;
-    const d = new Date(peakDate + 'T00:00:00');
-    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-  }, [peakDate]);
+  // Peak day is no longer computed client-side — it could be fetched from backend
+  const peakDate = null;
+  const peakAmount = 0;
+  const peakDayLabel = null;
 
   const getPeriodLabel = () => {
     switch (dateRange) {
@@ -734,11 +927,104 @@ export function SpendingScreen() {
     }
   }, []);
 
+  // ── Load Recurring Rules ───────────────────────────────────────────────────
+  const loadRecurring = useCallback(async () => {
+    setRecurringLoading(true);
+    try {
+      const [rulesData, statsData, accountsData, categoriesData] = await Promise.all([
+        api.getRecurringRules(),
+        api.getRecurringStats(),
+        api.getAccounts(),
+        api.getCategories(),
+      ]);
+      setRecurringRules(rulesData?.data || rulesData || []);
+      setRecurringStats(statsData?.summary || statsData || null);
+      setAccounts(accountsData?.accounts || []);
+      setCategories(categoriesData?.categories || []);
+    } catch (err) {
+      console.error('Error loading recurring rules:', err);
+    } finally {
+      setRecurringLoading(false);
+    }
+  }, []);
+
+  // ── Recurring CRUD handlers ────────────────────────────────────────────────
+  const handleToggleRecurring = useCallback(async (rule) => {
+    const id = rule.pattern_id || rule.id;
+    setTogglingRuleId(id);
+    try {
+      await api.updateRecurringRule(id, { is_active: !rule.is_active });
+      setRecurringRules(prev => prev.map(r =>
+        (r.pattern_id || r.id) === id ? { ...r, is_active: !r.is_active } : r
+      ));
+    } catch (err) {
+      Alert.alert('Error', 'Failed to toggle rule');
+    } finally {
+      setTogglingRuleId(null);
+    }
+  }, []);
+
+  const handleDeleteRecurring = useCallback((rule) => {
+    const id = rule.pattern_id || rule.id;
+    const name = rule.merchant_name || rule.match_pattern || rule.name_pattern || 'this rule';
+    Alert.alert(
+      'Delete Rule',
+      `Delete recurring rule for "${name}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingRuleId(id);
+            try {
+              await api.deleteRecurringRule(id);
+              setRecurringRules(prev => prev.filter(r => (r.pattern_id || r.id) !== id));
+            } catch (err) {
+              Alert.alert('Error', 'Failed to delete rule');
+            } finally {
+              setDeletingRuleId(null);
+            }
+          },
+        },
+      ]
+    );
+  }, []);
+
+  const handleSaveRecurring = useCallback(async (formData) => {
+    try {
+      if (editingRule) {
+        const id = editingRule.pattern_id || editingRule.id;
+        await api.updateRecurringRule(id, formData);
+      } else {
+        await api.createRecurringRule(formData);
+      }
+      setShowRecurringForm(false);
+      setEditingRule(null);
+      await loadRecurring();
+    } catch (err) {
+      Alert.alert('Error', editingRule ? 'Failed to update rule' : 'Failed to create rule');
+      throw err;
+    }
+  }, [editingRule, loadRecurring]);
+
+  const handleEditRecurring = useCallback((rule) => {
+    setEditingRule(rule);
+    setShowRecurringForm(true);
+  }, []);
+
+  const handleAddRecurring = useCallback(() => {
+    setEditingRule(null);
+    setShowRecurringForm(true);
+  }, []);
+
   useEffect(() => {
     if (activeTab === 'cc-payments') {
       loadLiabilities();
+    } else if (activeTab === 'recurring') {
+      loadRecurring();
     }
-  }, [activeTab, loadLiabilities]);
+  }, [activeTab, loadLiabilities, loadRecurring]);
 
   useFocusEffect(
     useCallback(() => {
@@ -746,9 +1032,11 @@ export function SpendingScreen() {
       loadDashboard();
       if (activeTab === 'cc-payments') {
         loadLiabilities();
+      } else if (activeTab === 'recurring') {
+        loadRecurring();
       }
       return () => {};
-    }, [loadDashboard, loadLiabilities, activeTab])
+    }, [loadDashboard, loadLiabilities, loadRecurring, activeTab])
   );
 
   // ── Handlers ──────────────────────────────────────────────────────────────
@@ -757,6 +1045,8 @@ export function SpendingScreen() {
     loadDashboard();
     if (activeTab === 'cc-payments') {
       loadLiabilities();
+    } else if (activeTab === 'recurring') {
+      loadRecurring();
     }
   };
 
@@ -812,16 +1102,17 @@ export function SpendingScreen() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* ── Header ────────────────────────────────────────────────────────── */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Spending</Text>
-      </View>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        {/* ── Header ────────────────────────────────────────────────────────── */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Spending</Text>
+        </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
@@ -859,6 +1150,7 @@ export function SpendingScreen() {
           {[
             { key: 'summary', label: 'Summary' },
             { key: 'detailed', label: 'Detailed' },
+            { key: 'recurring', label: 'Recurring' },
             { key: 'cc-payments', label: 'CC Payments' },
           ].map(({ key, label }) => {
             const isActive = activeTab === key;
@@ -1143,6 +1435,223 @@ export function SpendingScreen() {
           </>
         )}
 
+        {/* ══════════════════ RECURRING TAB ══════════════════════════════════ */}
+        {activeTab === 'recurring' && (
+          <>
+            {recurringLoading ? (
+              <View style={styles.centerContent}>
+                <ActivityIndicator size="large" color={D.primary} />
+                <Text style={styles.loadingText}>Loading recurring rules…</Text>
+              </View>
+            ) : (
+              <>
+                {/* ── Stats Summary ─────────────────────────────────────────── */}
+                <View style={styles.recurringStatsRow}>
+                  <View style={[styles.recurringStatCard, { borderLeftColor: semantic.income }]}>
+                    <Text style={styles.recurringStatLabel}>INCOME</Text>
+                    <Text style={[styles.recurringStatAmount, { color: semantic.income }]}>
+                      {formatCurrency(
+                        recurringRules.filter(r => r.is_active && (r.amount || 0) < 0)
+                          .reduce((s, r) => s + Math.abs(r.amount || 0), 0)
+                      )}
+                    </Text>
+                  </View>
+                  <View style={[styles.recurringStatCard, { borderLeftColor: semantic.expense }]}>
+                    <Text style={styles.recurringStatLabel}>EXPENSES</Text>
+                    <Text style={[styles.recurringStatAmount, { color: semantic.expense }]}>
+                      {formatCurrency(
+                        recurringRules.filter(r => r.is_active && (r.amount || 0) > 0)
+                          .reduce((s, r) => s + (r.amount || 0), 0)
+                      )}
+                    </Text>
+                  </View>
+                  <View style={[styles.recurringStatCard, { borderLeftColor: brand.primary }]}>
+                    <Text style={styles.recurringStatLabel}>ACTIVE</Text>
+                    <Text style={[styles.recurringStatAmount, { color: brand.primary }]}>
+                      {recurringRules.filter(r => r.is_active && !r.is_dismissed).length}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* ── Filter Pills ───────────────────────────────────────────── */}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.filterRow}
+                  contentContainerStyle={styles.filterRowContent}
+                >
+                  {[
+                    { key: 'all', label: 'All' },
+                    { key: 'active', label: 'Active' },
+                    { key: 'paused', label: 'Paused' },
+                    { key: 'auto', label: 'Auto' },
+                  ].map(f => (
+                    <TouchableOpacity
+                      key={f.key}
+                      onPress={() => setRecurringFilter(f.key)}
+                      style={[styles.filterPill, recurringFilter === f.key && styles.filterPillActive]}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.filterPillText, recurringFilter === f.key && styles.filterPillTextActive]}>
+                        {f.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+
+                {/* ── Search Input ───────────────────────────────────────────── */}
+                <View style={styles.searchRow}>
+                  <Ionicons name="search" size={16} color={D.onSurfaceVariant} style={styles.searchIcon} />
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder="Search rules…"
+                    placeholderTextColor={D.onSurfaceVariant}
+                    value={recurringSearch}
+                    onChangeText={setRecurringSearch}
+                  />
+                </View>
+
+                {/* ── Rules List ─────────────────────────────────────────────── */}
+                {(() => {
+                  const filtered = recurringRules.filter(rule => {
+                    if (rule.is_dismissed) return false;
+                    if (recurringFilter === 'active' && !rule.is_active) return false;
+                    if (recurringFilter === 'paused' && rule.is_active) return false;
+                    if (recurringFilter === 'auto' && rule.source !== 'auto_detected') return false;
+                    if (recurringSearch.trim()) {
+                      const q = recurringSearch.toLowerCase();
+                      const name = rule.merchant_name || rule.match_pattern || rule.name_pattern || '';
+                      if (!name.toLowerCase().includes(q)) return false;
+                    }
+                    return true;
+                  }).sort((a, b) => {
+                    // Sort by next expected date (soonest first)
+                    const aDate = a.next_expected_date ? new Date(a.next_expected_date) : null;
+                    const bDate = b.next_expected_date ? new Date(b.next_expected_date) : null;
+                    if (!aDate && !bDate) return 0;
+                    if (!aDate) return 1;
+                    if (!bDate) return -1;
+                    return aDate - bDate;
+                  });
+
+                  if (filtered.length === 0) {
+                    return (
+                      <View style={styles.emptyState}>
+                        <Ionicons name="repeat-outline" size={48} color={D.onSurfaceVariant} />
+                        <Text style={styles.emptyText}>
+                          {recurringFilter === 'all' && !recurringSearch
+                            ? 'No recurring rules yet'
+                            : 'No rules match your filters'}
+                        </Text>
+                        <TouchableOpacity style={styles.addRuleButton} onPress={handleAddRecurring}>
+                          <Ionicons name="add" size={18} color={D.onSurface} />
+                          <Text style={styles.addRuleButtonText}>Add Rule</Text>
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  }
+
+                  return filtered.map((rule, idx) => {
+                    const id = rule.pattern_id || rule.id || idx;
+                    const name = rule.merchant_name || rule.match_pattern || rule.name_pattern || 'Unknown';
+                    const amount = rule.amount || 0;
+                    const isIncome = amount < 0;
+                    const freq = FREQ_DISPLAY[rule.frequency] || rule.frequency || '—';
+                    const nextDate = rule.next_expected_date;
+                    const isActive = rule.is_active;
+                    const isAuto = rule.source === 'auto_detected';
+                    const accountName = rule.account_name || 'Any account';
+                    const categoryName = rule.category_name || '';
+                    const dayOfMonth = rule.day_of_month;
+
+                    const isToggling = togglingRuleId === id;
+                    const isDeleting = deletingRuleId === id;
+
+                    return (
+                      <Swipeable
+                        key={id}
+                        renderRightActions={() => (
+                          <View style={styles.swipeActions}>
+                            <TouchableOpacity
+                              style={[styles.swipeAction, { backgroundColor: isActive ? '#f59e0b' : semantic.income }]}
+                              onPress={() => handleToggleRecurring(rule)}
+                              disabled={isToggling}
+                            >
+                              <Ionicons
+                                name={isActive ? 'pause' : 'play'}
+                                size={20}
+                                color="#fff"
+                              />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[styles.swipeAction, { backgroundColor: semantic.expense }]}
+                              onPress={() => handleDeleteRecurring(rule)}
+                              disabled={isDeleting}
+                            >
+                              <Ionicons name="trash" size={20} color="#fff" />
+                            </TouchableOpacity>
+                          </View>
+                        )}
+                        overshootRight={false}
+                        friction={2}
+                      >
+                        <TouchableOpacity
+                          style={[styles.recurringRuleCard, !isActive && styles.recurringRuleCardPaused]}
+                          onPress={() => handleEditRecurring(rule)}
+                          activeOpacity={0.7}
+                        >
+                          <View style={styles.recurringRuleHeader}>
+                            <View style={styles.recurringRuleTitleRow}>
+                              {isAuto && (
+                                <View style={styles.autoBadge}>
+                                  <Ionicons name="flash" size={10} color="#f59e0b" />
+                                </View>
+                              )}
+                              <Text style={styles.recurringRuleName} numberOfLines={1}>{name}</Text>
+                            </View>
+                            <Text style={[styles.recurringRuleAmount, isIncome && { color: semantic.income }]}>
+                              {isIncome ? '+' : ''}{formatCurrency(amount)}
+                            </Text>
+                          </View>
+
+                          <View style={styles.recurringRuleMeta}>
+                            <View style={styles.freqBadge}>
+                              <Text style={styles.freqBadgeText}>{freq}</Text>
+                            </View>
+                            {dayOfMonth != null && (
+                              <Text style={styles.recurringRuleMetaText}>Day {dayOfMonth}</Text>
+                            )}
+                            <Text style={styles.recurringRuleMetaText}>{accountName}</Text>
+                            {categoryName && (
+                              <Text style={styles.recurringRuleMetaText}>• {categoryName}</Text>
+                            )}
+                          </View>
+
+                          <View style={styles.recurringRuleFooter}>
+                            <Text style={styles.recurringRuleFooterText}>
+                              Next: {nextDate ? formatShortDate(nextDate) : '—'}
+                            </Text>
+                            {!isActive && (
+                              <View style={styles.pausedBadge}>
+                                <Text style={styles.pausedBadgeText}>PAUSED</Text>
+                              </View>
+                            )}
+                          </View>
+                        </TouchableOpacity>
+                      </Swipeable>
+                    );
+                  });
+                })()}
+
+                {/* ── Add Rule FAB ──────────────────────────────────────────── */}
+                <TouchableOpacity style={styles.fab} onPress={handleAddRecurring} activeOpacity={0.8}>
+                  <Ionicons name="add" size={28} color="#fff" />
+                </TouchableOpacity>
+              </>
+            )}
+          </>
+        )}
+
         <View style={{ height: 40 }} />
       </ScrollView>
 
@@ -1213,7 +1722,18 @@ export function SpendingScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+
+      {/* ── Recurring Rule Form Modal ────────────────────────────────────── */}
+      <RecurringRuleFormModal
+        visible={showRecurringForm}
+        rule={editingRule}
+        accounts={accounts}
+        categories={categories}
+        onSave={handleSaveRecurring}
+        onCancel={() => { setShowRecurringForm(false); setEditingRule(null); }}
+      />
+      </View>
+    </GestureHandlerRootView>
   );
 }
 
@@ -1936,6 +2456,364 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: D.onSurface,
+    fontFamily: 'Manrope',
+  },
+
+  // ── Recurring Tab Styles ──────────────────────────────────────────────────
+  recurringStatsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  recurringStatCard: {
+    flex: 1,
+    backgroundColor: D.cardBg,
+    borderRadius: 12,
+    padding: 14,
+    borderLeftWidth: 3,
+  },
+  recurringStatLabel: {
+    fontSize: 10,
+    color: D.onSurfaceVariant,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    fontFamily: 'Inter',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  recurringStatAmount: {
+    fontSize: 18,
+    fontWeight: '700',
+    fontFamily: 'Manrope',
+  },
+
+  filterRow: {
+    marginBottom: 12,
+  },
+  filterRowContent: {
+    gap: 8,
+    paddingHorizontal: 4,
+  },
+  filterPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 100,
+    backgroundColor: D.surfaceLow,
+  },
+  filterPillActive: {
+    backgroundColor: D.surfaceHigh,
+    borderWidth: 1,
+    borderColor: D.outline,
+  },
+  filterPillText: {
+    fontSize: 13,
+    color: D.onSurfaceVariant,
+    fontFamily: 'Inter',
+  },
+  filterPillTextActive: {
+    color: D.onSurface,
+    fontWeight: '600',
+    fontFamily: 'Manrope',
+  },
+
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: D.surfaceLow,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    marginBottom: 16,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: D.onSurface,
+    fontFamily: 'Inter',
+  },
+
+  recurringRuleCard: {
+    backgroundColor: D.cardBg,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+  },
+  recurringRuleCardPaused: {
+    opacity: 0.6,
+  },
+  recurringRuleHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 6,
+  },
+  recurringRuleTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 6,
+  },
+  autoBadge: {
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderRadius: 4,
+    padding: 2,
+  },
+  recurringRuleName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: D.onSurface,
+    fontFamily: 'Inter',
+    flex: 1,
+  },
+  recurringRuleAmount: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: D.onSurface,
+    fontFamily: 'Manrope',
+  },
+  recurringRuleMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 8,
+  },
+  freqBadge: {
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  freqBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: brand.primary,
+    fontFamily: 'Inter',
+  },
+  recurringRuleMetaText: {
+    fontSize: 12,
+    color: D.onSurfaceVariant,
+    fontFamily: 'Inter',
+  },
+  recurringRuleFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+    paddingTop: 8,
+    marginTop: 2,
+  },
+  recurringRuleFooterText: {
+    fontSize: 12,
+    color: D.onSurfaceVariant,
+    fontFamily: 'Inter',
+  },
+  pausedBadge: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  pausedBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: semantic.expense,
+    fontFamily: 'Inter',
+    letterSpacing: 0.5,
+  },
+
+  swipeActions: {
+    flexDirection: 'row',
+    width: 120,
+  },
+  swipeAction: {
+    width: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 8,
+    marginVertical: 4,
+    marginLeft: 4,
+  },
+
+  fab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 30,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: brand.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+
+  addRuleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: D.surfaceHigh,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginTop: 16,
+    gap: 6,
+  },
+  addRuleButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: D.onSurface,
+    fontFamily: 'Inter',
+  },
+
+  // ── Recurring Form Modal Styles ───────────────────────────────────────────
+  formModal: {
+    flex: 1,
+    backgroundColor: D.bg,
+  },
+  formHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: D.outline,
+  },
+  formTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: D.onSurface,
+    fontFamily: 'Manrope',
+  },
+  formBody: {
+    flex: 1,
+  },
+  formContent: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+  formField: {
+    marginBottom: 18,
+  },
+  formLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: D.onSurfaceVariant,
+    fontFamily: 'Inter',
+    marginBottom: 8,
+  },
+  formInput: {
+    backgroundColor: D.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: D.outline,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: D.onSurface,
+    fontFamily: 'Inter',
+  },
+  formHint: {
+    fontSize: 11,
+    color: D.onSurfaceVariant,
+    fontFamily: 'Inter',
+    marginTop: 4,
+  },
+  formPicker: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: D.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: D.outline,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 8,
+  },
+  formPickerText: {
+    fontSize: 15,
+    color: D.onSurface,
+    fontFamily: 'Inter',
+  },
+  chipRow: {
+    flexDirection: 'row',
+    marginTop: 4,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: D.surfaceLow,
+    marginRight: 8,
+  },
+  chipActive: {
+    backgroundColor: brand.primary,
+  },
+  chipText: {
+    fontSize: 13,
+    color: D.onSurfaceVariant,
+    fontFamily: 'Inter',
+  },
+  chipTextActive: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 8,
+  },
+  toggleText: {
+    fontSize: 14,
+    color: D.onSurface,
+    fontFamily: 'Inter',
+  },
+  formFooter: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: D.outline,
+  },
+  formCancelBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: D.surfaceLow,
+    alignItems: 'center',
+  },
+  formCancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: D.onSurface,
+    fontFamily: 'Inter',
+  },
+  formSaveBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: brand.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  formSaveBtnDisabled: {
+    opacity: 0.6,
+  },
+  formSaveText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#fff',
     fontFamily: 'Manrope',
   },
 });

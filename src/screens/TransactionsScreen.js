@@ -22,7 +22,6 @@ import {
   getDateRange,
   getAvailableMonths,
   getTransactionCategory,
-  getMerchantName,
   getAccountName,
 } from '../utils/helpers';
 import { colors, spacing, fontSize, fontWeight, fontFamily } from '../utils/theme';
@@ -105,7 +104,7 @@ const TableRow = React.memo(function TableRow({
   onLongPress,
 }) {
   const category = getTransactionCategory(tx);
-  const merchant = getMerchantName(tx);
+  const merchant = tx.merchant_display_name || 'Unknown';
   const isIncome = tx.amount < 0;
   const bg = rowIndex % 2 === 0 ? '#131313' : '#1c1b1b';
 
@@ -294,7 +293,7 @@ export function TransactionsScreen() {
       const q = search.toLowerCase();
       result = result.filter(
         (t) =>
-          getMerchantName(t).toLowerCase().includes(q) ||
+          (t.merchant_display_name || '').toLowerCase().includes(q) ||
           getTransactionCategory(t).toLowerCase().includes(q)
       );
     }

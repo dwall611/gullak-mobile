@@ -6,7 +6,10 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "capture:fixtures": "node scripts/capture-fixtures.js",
+    "generate:golden": "node scripts/generate-golden.js",
+    "test:golden": "node tests/golden.test.js"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
@@ -17,6 +20,7 @@
     "babel-preset-expo": "^55.0.10",
     "expo": "~55.0.5",
     "expo-build-properties": "~55.0.9",
+    "expo-device": "^55.0.10",
     "expo-haptics": "~55.0.9",
     "expo-notifications": "~55.0.13",
     "expo-status-bar": "~55.0.4",

@@ -44,62 +44,7 @@ const fmtK = (v) => {
   return `${sign}$${abs.toFixed(0)}`;
 };
 
-const STOP_WORDS = new Set(['payment', 'orig', 'entry', 'descr', 'name', 'from', 'with', 'bank', 'card', 'corp', 'inc', 'llc']);
 
-function extractKeyword(merchant) {
-  const words = (merchant || '').toLowerCase().split(/[\s,_]+/).filter((w) => w.length > 3 && !STOP_WORDS.has(w) && !/^\d+$/.test(w));
-  return words[0] || '';
-}
-
-function merchantMatches(recurringMerchant, txName) {
-  const kw = extractKeyword(recurringMerchant);
-  return kw ? (txName || '').toLowerCase().includes(kw) : false;
-}
-
-function getPfcPrimary(tx) {
-  if (!tx.personal_finance_category) return '';
-  try {
-    const pfc = typeof tx.personal_finance_category === 'string' ? JSON.parse(tx.personal_finance_category) : tx.personal_finance_category;
-    return (pfc?.primary || '').toUpperCase();
-  } catch { return ''; }
-}
-
-function txEffectiveCategory(tx) {
-  if (tx.override_category) return tx.override_category;
-  const pfc = getPfcPrimary(tx);
-  const MAP = {
-    FOOD_AND_DRINK: 'Food & Dining', TRANSPORTATION: 'Transportation', GENERAL_MERCHANDISE: 'Shopping',
-    ENTERTAINMENT: 'Entertainment', TRAVEL: 'Travel', PERSONAL_CARE: 'Personal Care', HEALTHCARE: 'Healthcare',
-    RENT: 'Housing', HOME_IMPROVEMENT: 'Home', UTILITIES: 'Bills & Utilities', INCOME: 'Income',
-    TRANSFER_IN: 'Transfer', TRANSFER_OUT: 'Transfer', LOAN_PAYMENTS: 'Credit Card Payments',
-    BANK_FEES: 'Bank Fees', GROCERIES: 'Groceries', EDUCATION: 'Education', RENT_AND_UTILITIES: 'Bills & Utilities',
-  };
-  return MAP[pfc] || 'Uncategorized';
-}
-
-const P2P_KEYWORDS = ['zelle', 'venmo', 'cashapp', 'cash app', 'paypal'];
-function isP2PPayment(tx) {
-  return P2P_KEYWORDS.some((kw) => `${tx.merchant_name || ''} ${tx.name || ''}`.toLowerCase().includes(kw));
-}
-
-function isCCPaymentTx(tx) {
-  if (isP2PPayment(tx)) return false;
-  if (tx.override_category) {
-    const oc = tx.override_category.toLowerCase();
-    return oc === 'transfer' || oc === 'credit card payments';
-  }
-  const cat = txEffectiveCategory(tx).toLowerCase();
-  if (cat === 'credit card payments' || cat === 'transfer') return true;
-  const pfc = getPfcPrimary(tx);
-  return pfc === 'LOAN_PAYMENTS' || pfc === 'TRANSFER_OUT';
-}
-
-const MANUAL_RECURRING = [
-  { id: 'ny529-a', merchant: 'NewYork 529 Contribution', amount: 500, dayOfMonth: 5, skipMonths: [], keyword: '529' },
-  { id: 'ny529-b', merchant: 'NewYork 529 Contribution', amount: 500, dayOfMonth: 5, skipMonths: [], keyword: '529' },
-  { id: 'pseg', merchant: 'Public Service PSEG', amount: 120, dayOfMonth: 3, skipMonths: [], keyword: 'pseg' },
-  { id: 'bilt-mortgage', merchant: 'Mortgage (Bilt)', amount: 5197, dayOfMonth: 5, skipMonths: [], keyword: 'bilt card hous' },
-];
 
 // ─── Alert Banner ─────────────────────────────────────────────────────────────
 function AlertBanner({ alerts, onAlertPress, lastUpdated, hasError }) {
@@ -188,15 +133,15 @@ function AlertBanner({ alerts, onAlertPress, lastUpdated, hasError }) {
 function PaymentDueBanner({ liabilities }) {
   if (!liabilities) return null;
   const creditCards = liabilities.credit_cards || [];
-  const today = new Date();
-  const todayStr = today.toISOString().split('T')[0];
+  
+  // Use API's urgency field directly - no local calculation needed
+  // API provides: urgency ('high', 'medium', 'low') and days_until_due
   const soon = creditCards.filter(cc => {
     if (!cc.next_payment_due_date) return false;
     if (!cc.last_statement_balance || cc.last_statement_balance <= 0) return false;
-    if (cc.payment_recorded) return false; // Skip if payment already recorded (cc_payment_tracking)
-    const due = new Date(cc.next_payment_due_date);
-    const daysUntilDue = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
-    return daysUntilDue >= 0 && daysUntilDue <= 7;
+    if (cc.payment_recorded) return false; // Skip if payment already recorded
+    // Use API's urgency field if available, otherwise fall back to checking is_overdue
+    return cc.is_overdue || cc.urgency === 'high' || cc.urgency === 'medium';
   });
 
   if (soon.length === 0) return null;
@@ -204,15 +149,23 @@ function PaymentDueBanner({ liabilities }) {
   return (
     <View style={styles.section}>
       {soon.map((cc, idx) => {
-        const dueDate = new Date(cc.next_payment_due_date + 'T00:00:00');
-        const daysUntil = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
-        const label = daysUntil === 0 ? 'Due TODAY' : daysUntil === 1 ? 'Due tomorrow' : `Due in ${daysUntil} days`;
+        // Use API's days_until_due and is_overdue fields directly
+        const daysUntil = cc.days_until_due ?? 0;
+        const isOverdue = cc.is_overdue ?? false;
+        const label = isOverdue 
+          ? 'OVERDUE' 
+          : daysUntil === 0 
+            ? 'Due TODAY' 
+            : daysUntil === 1 
+              ? 'Due tomorrow' 
+              : `Due in ${daysUntil} days`;
+        const urgencyColor = isOverdue ? colors.expense : cc.urgency === 'high' ? colors.warning : colors.text;
         return (
           <View key={cc.account_id || idx} style={styles.paymentBanner}>
-            <Ionicons name="card-outline" size={18} color={colors.warning} style={{ marginRight: spacing.sm }} />
+            <Ionicons name="card-outline" size={18} color={isOverdue ? colors.expense : colors.warning} style={{ marginRight: spacing.sm }} />
             <View style={{ flex: 1 }}>
               <Text style={styles.paymentTitle}>{cc.institution_name || cc.account_name}</Text>
-              <Text style={styles.paymentSub}>{label} · {fmt(cc.last_statement_balance)}</Text>
+              <Text style={[styles.paymentSub, isOverdue && { color: colors.expense }]}>{label} · {fmt(cc.last_statement_balance)}</Text>
             </View>
           </View>
         );
@@ -494,7 +447,6 @@ export function OverviewScreen() {
   const [alertsLastUpdated, setAlertsLastUpdated] = useState(null);
   const [alertsError, setAlertsError] = useState(false);
   const pollingIntervalRef = useRef(null);
-  const previousAlertIdsRef = useRef(new Set());
 
   const formatDateStr = (d) => {
     const y = d.getFullYear();
@@ -522,12 +474,14 @@ export function OverviewScreen() {
   const loadData = useCallback(async () => {
     setError(null);
     try {
-      const [statsData, alertHistory, categoryTotals, accountsData, recurringResp, liabResp] = await Promise.all([
+      const currentMonth = dates.startDate.substring(0, 7);
+
+      const [statsData, alertHistory, categoryTotals, accountsData, burnRateData, liabResp] = await Promise.all([
         api.getSummary({ start_date: dates.startDate, end_date: dates.endDate }),
         api.getAlertHistory(10),
         api.getSpendingByCategory(dates.startDate, dates.endDate, false),
         api.getAccounts(),
-        api.getRecurringTransactions(6),
+        api.getBurnRate(currentMonth),
         api.getLiabilities(),
       ]);
 
@@ -536,250 +490,42 @@ export function OverviewScreen() {
       setCategoryData((categoryTotals.data || []).map(item => ({ category: item.category_name, amount: item.total })).sort((a, b) => b.amount - a.amount));
       setLiabilities(liabResp);
 
-      // Budget + Forecast calculation
+      // Budget consumption from burn-rate API
       const checking = (accountsData.accounts || []).find(a => a.name === 'Main Checking');
       if (checking) {
-        const [checkingTxnsData, allTxnsData] = await Promise.all([
-          api.getTransactions({ account_id: checking.id, start_date: dates.startDate, end_date: dates.endDate, limit: 500 }),
-          api.getTransactions({ start_date: dates.startDate, end_date: dates.endDate, limit: 2000 }),
-        ]);
+        // Use summary values from API response
+        const summary = burnRateData.summary || {};
+        const income = summary.income || 0;
+        const fixed = summary.fixed_expenses || 0;
+        const discretionary = summary.discretionary_spent || 0;
+        const budget = income - fixed;
+        const burnPct = budget > 0 ? (discretionary / budget) * 100 : 0;
+        setBudgetData({ budget, spent: discretionary, timePct, burnPct });
 
-        const checkingTxns = checkingTxnsData.transactions || [];
-        const allTxns = allTxnsData.transactions || [];
-        const recurringPatterns = recurringResp?.data || [];
-        const mainRecurring = recurringPatterns.filter(r => r.account === 'Main Checking');
-        const matchedTxnIds = new Set();
-        const incomeItems = [];
-        const fixedItems = [];
-
-        // Manual recurring
-        for (const manual of MANUAL_RECURRING) {
-          if (manual.skipMonths?.includes(dates.monthIndex)) continue;
-          const matched = checkingTxns.filter(tx => {
-            const haystack = `${tx.merchant_name || ''} ${tx.name || ''}`.toLowerCase();
-            return haystack.includes(manual.keyword) && !matchedTxnIds.has(tx.id);
-          });
-          const match = matched[0];
-          if (match) matchedTxnIds.add(match.id);
-          fixedItems.push({ expectedAmount: manual.amount, actualAmount: match ? Math.abs(match.amount) : null, isPosted: !!match });
-        }
-
-        // Recurring patterns
-        for (const rec of mainRecurring) {
-          if (rec.category === 'Credit Card Payments' || rec.category === 'Transfer') continue;
-          const isFitch = rec.merchant.toLowerCase().includes('fitch');
-          const isHSBC = rec.merchant.toLowerCase().includes('hsbc');
-          const isIncome = rec.avgAmount < 0;
-          const matched = checkingTxns.filter(tx => merchantMatches(rec.merchant, tx.merchant_name || tx.name || '') && !matchedTxnIds.has(tx.id));
-
-          if (isFitch || (isIncome && isHSBC)) {
-            const avgSingle = Math.abs(rec.avgAmount);
-            const pay1 = matched.find(tx => parseInt(tx.date.split('-')[2], 10) <= 17);
-            const pay2 = matched.find(tx => parseInt(tx.date.split('-')[2], 10) > 17 && tx !== pay1);
-            [pay1, pay2].forEach(match => {
-              if (match) matchedTxnIds.add(match.id);
-              incomeItems.push({ expectedAmount: avgSingle, actualAmount: match ? Math.abs(match.amount) : null, isPosted: !!match });
-            });
-          } else if (isIncome) {
-            const match = matched[0];
-            if (match) matchedTxnIds.add(match.id);
-            incomeItems.push({ expectedAmount: Math.abs(rec.avgAmount), actualAmount: match ? Math.abs(match.amount) : null, isPosted: !!match });
-          } else {
-            const match = matched[0];
-            if (match) matchedTxnIds.add(match.id);
-            fixedItems.push({ expectedAmount: Math.abs(rec.avgAmount), actualAmount: match ? Math.abs(match.amount) : null, isPosted: !!match });
-          }
-        }
-
-        // Discretionary
-        const EXCLUDED_ACCOUNTS = ['Rental'];
-        const discretionaryTxns = [];
-        for (const tx of allTxns) {
-          if (matchedTxnIds.has(tx.id) || tx.amount <= 0) continue;
-          if (EXCLUDED_ACCOUNTS.some(name => (tx.account_name || '').toLowerCase().includes(name.toLowerCase()))) continue;
-          if (!isCCPaymentTx(tx)) discretionaryTxns.push(tx);
-        }
-
-        const effectiveIncome = incomeItems.reduce((s, i) => s + (i.isPosted ? i.actualAmount : i.expectedAmount), 0);
-        const effectiveFixed = fixedItems.reduce((s, i) => s + (i.isPosted ? i.actualAmount : i.expectedAmount), 0);
-        const budget = effectiveIncome - effectiveFixed;
-        const discretionarySpent = discretionaryTxns.reduce((s, tx) => s + tx.amount, 0);
-        const burnPct = budget > 0 ? (discretionarySpent / budget) * 100 : 0;
-
-        setBudgetData({ budget, spent: discretionarySpent, timePct, burnPct });
-
-        // Forecast - Recurring Projections
-        const projectedRows = [];
-        
-        // Add recurring expense projections
-        const addDays = (d, n) => {
-          const result = new Date(d);
-          result.setDate(result.getDate() + n);
-          return result;
-        };
-
-        const interval = (rec) => {
-          const avg = rec.avgInterval;
-          if (avg == null || isNaN(avg) || avg <= 0) return 30;
-          return Math.max(Math.round(avg), 7);
-        };
-
-        const HUDSON_OVERRIDE = { amount: 6082, dayOfMonth: 1, skipMonths: [5, 6] };
-        const getOverride = (merchant) => {
-          if (merchant.toLowerCase().includes('hudson')) return HUDSON_OVERRIDE;
-          return null;
-        };
-
-        const generateDates = (rec) => {
-          const override = getOverride(rec.merchant);
-          const dom = rec.dayOfMonth ?? rec.day_of_month ?? (override?.dayOfMonth);
-          const currentMonthStr = dates.todayStr.substring(0, 7);
-          const today = new Date(dates.todayStr);
-
-          if (dom != null && !isNaN(dom)) {
-            const projDates = [];
-            for (let mo = 0; mo <= 1; mo++) {
-              const d = new Date(today.getFullYear(), today.getMonth() + mo, dom);
-              const dStr = formatDateStr(d);
-              if (dStr > dates.projectionEndDate) break;
-              if (dStr <= dates.todayStr) continue;
-              if (override?.skipMonths?.includes(d.getMonth())) continue;
-              projDates.push(dStr);
-            }
-            return projDates;
-          }
-
-          if (!rec.nextExpected) return [];
-          let cursor = new Date(rec.nextExpected);
-          if (isNaN(cursor.getTime())) return [];
-          const step = interval(rec);
-          while (formatDateStr(cursor) <= dates.todayStr) {
-            cursor = addDays(cursor, step);
-          }
-          const projDates = [];
-          while (true) {
-            const d = formatDateStr(cursor);
-            if (d > dates.projectionEndDate) break;
-            projDates.push(d);
-            cursor = addDays(cursor, step);
-          }
-          return projDates;
-        };
-
-        // Project API-detected recurring patterns
-        for (const rec of mainRecurring) {
-          if (rec.category === 'Credit Card Payments' || rec.category === 'Transfer') continue;
-          const alreadyPaid = checkingTxns.some((tx) =>
-            merchantMatches(rec.merchant, tx.merchant_name || tx.name || '')
-          );
-          const step = interval(rec);
-          const currentMonthStr = dates.todayStr.substring(0, 7);
-          for (const projDateStr of generateDates(rec)) {
-            if (alreadyPaid && step >= 28 && projDateStr.substring(0, 7) === currentMonthStr) continue;
-            projectedRows.push({
-              id: `proj-${rec.merchant}-${projDateStr}`,
-              date: projDateStr,
-              name: rec.merchant,
-              merchant_name: rec.merchant,
-              amount: rec.avgAmount,
-              isProjected: true,
-            });
-          }
-        }
-
-        // Project manual recurring
-        const today = new Date(dates.todayStr);
-        for (const manual of MANUAL_RECURRING) {
-          const alreadyPaid = checkingTxns.some((tx) =>
-            (tx.merchant_name || tx.name || '').toLowerCase().includes(manual.keyword)
-          );
-          const currentMonthStr = dates.todayStr.substring(0, 7);
-          for (let mo = 0; mo <= 1; mo++) {
-            const d = new Date(today.getFullYear(), today.getMonth() + mo, manual.dayOfMonth);
-            const dStr = formatDateStr(d);
-            if (dStr <= dates.todayStr || dStr > dates.projectionEndDate) continue;
-            if (manual.skipMonths?.includes(d.getMonth())) continue;
-            if (alreadyPaid && dStr.substring(0, 7) === currentMonthStr) continue;
-            projectedRows.push({
-              id: `proj-manual-${manual.id}-${dStr}`,
-              date: dStr,
-              name: manual.merchant,
-              merchant_name: manual.merchant,
-              amount: manual.amount,
-              isProjected: true,
-            });
-          }
-        }
-
-        // Add CC payment projections
+        // Forecast data from API — returns forecast_rows with running balances
         try {
-          const creditCards = liabResp?.credit_cards || [];
-          for (const cc of creditCards) {
-            const dueDate = cc.next_payment_due_date;
-            const stmtBal = cc.last_statement_balance;
-            if (!stmtBal || stmtBal <= 0 || !dueDate || dueDate <= dates.todayStr || dueDate > dates.projectionEndDate || cc.payment_recorded) continue;
-            const mask = cc.mask;
-            const instName = (cc.institution_name || cc.account_name || '').toLowerCase();
-            const alreadyPaid = checkingTxns.some(tx => {
-              const name = (tx.merchant_name || tx.name || '').toLowerCase();
-              return (mask && name.includes(mask)) || (instName && name.includes(instName.split(' ')[0]));
+          const forecastResp = await api.getForecast(checking.account_id || checking.id, 60);
+          const forecastRows = forecastResp.forecast_rows || [];
+
+          // Build date-aggregated chart data
+          const byDate = new Map();
+          let runPaid = 0, runReceived = 0;
+          for (const row of forecastRows) {
+            const amt = row.amount ?? (row.expense > 0 ? row.expense : -(row.income || 0));
+            if (amt > 0) runPaid += amt;
+            else runReceived += Math.abs(amt);
+            byDate.set(row.date, {
+              date: row.date,
+              balance: row.runningBalance ?? 0,
+              paid: runPaid,
+              received: runReceived,
+              isProjected: row.isProjected ?? false,
             });
-            if (!alreadyPaid) {
-              projectedRows.push({ date: dueDate, amount: stmtBal, isProjected: true, isCCPayment: true });
-            }
           }
+          setForecastData([...byDate.values()].sort((a, b) => a.date > b.date ? 1 : -1));
         } catch (err) {
-          console.error('[Overview] Forecast CC error:', err);
+          console.error('[Overview] Forecast error:', err);
         }
-
-        const allRows = [...checkingTxns, ...projectedRows].sort((a, b) => a.date > b.date ? 1 : a.date < b.date ? -1 : 0);
-        const currentBalance = checking.current_balance || 0;
-        let anchorIdx = -1;
-        for (let i = allRows.length - 1; i >= 0; i--) {
-          if (!allRows[i].isProjected && !allRows[i].isCCPayment && allRows[i].date <= dates.yesterday) {
-            anchorIdx = i;
-            break;
-          }
-        }
-
-        const balances = new Array(allRows.length);
-        if (anchorIdx === -1) {
-          const todayActual = allRows.filter(r => !r.isProjected && !r.isCCPayment && r.date >= dates.todayStr);
-          const preTodayBal = currentBalance + todayActual.reduce((s, r) => s + r.amount, 0);
-          let bal = preTodayBal;
-          for (let i = 0; i < allRows.length; i++) { bal = bal - allRows[i].amount; balances[i] = bal; }
-        } else {
-          balances[anchorIdx] = currentBalance;
-          for (let i = anchorIdx + 1; i < allRows.length; i++) { balances[i] = balances[i - 1] - allRows[i].amount; }
-          for (let i = anchorIdx - 1; i >= 0; i--) { balances[i] = balances[i + 1] + allRows[i + 1].amount; }
-        }
-
-        // Add paid/received tracking
-        let runPaid = 0, runReceived = 0;
-        const rowsWithBalance = allRows.map((tx, idx) => {
-          if (tx.amount > 0) runPaid += tx.amount;
-          else runReceived += Math.abs(tx.amount);
-          return {
-            date: tx.date,
-            balance: balances[idx],
-            paid: runPaid,
-            received: runReceived,
-            isProjected: tx.isProjected || tx.isCCPayment,
-          };
-        });
-
-        // Aggregate by date
-        const byDate = new Map();
-        for (const r of rowsWithBalance) {
-          byDate.set(r.date, {
-            date: r.date,
-            balance: r.balance,
-            paid: r.paid,
-            received: r.received,
-            isProjected: r.isProjected,
-          });
-        }
-        setForecastData([...byDate.values()].sort((a, b) => a.date > b.date ? 1 : -1));
       }
     } catch (err) {
       console.error('[OverviewScreen] Error:', err);
@@ -828,24 +574,11 @@ export function OverviewScreen() {
         setAlertsLastUpdated(new Date());
         setAlertsError(false);
 
-        // Detect new alerts and trigger notifications
-        const currentAlertIds = new Set(unacknowledged.map(a => a.id));
-        const previousAlertIds = previousAlertIdsRef.current;
-
-        // Find newly added alerts
-        const newAlerts = unacknowledged.filter(alert => !previousAlertIds.has(alert.id));
-
-        if (newAlerts.length > 0) {
-          console.log(`[OverviewScreen] Detected ${newAlerts.length} new alert(s)`);
-          
-          // Schedule notifications for new alerts
-          for (const alert of newAlerts) {
-            await scheduleAlertNotification(alert);
-          }
+        // Schedule notifications for ALL unacknowledged alerts
+        // scheduleAlertNotification handles deduplication via hasBeenNotified internally
+        for (const alert of unacknowledged) {
+          await scheduleAlertNotification(alert);
         }
-
-        // Update the previous alert IDs ref
-        previousAlertIdsRef.current = currentAlertIds;
 
       } catch (err) {
         console.error('[OverviewScreen] Error polling alerts:', err);

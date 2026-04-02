@@ -1,0 +1,35 @@
+{
+  "captured_at": "2026-04-01T03:55:13.690Z",
+  "source_client": "gullak-mobile v3.3.0",
+  "source_logic": "OverviewScreen.js",
+  "fixtures_used": [
+    "burn-rate.json",
+    "spending-by-category.json"
+  ],
+  "result": {
+    "month": "2026-04",
+    "as_of_date": "2026-04-01",
+    "days_elapsed": 31,
+    "days_total": 31,
+    "time_progress_pct": 100,
+    "budget": {
+      "total": 0,
+      "spent": 0,
+      "remaining": 0,
+      "burn_pct": 0
+    },
+    "actuals": {
+      "income": 0,
+      "fixed": 0,
+      "discretionary": 0,
+      "total_spent": 0,
+      "net": 0
+    },
+    "categories": []
+  },
+  "validation": {
+    "budget_non_negative": true,
+    "burn_pct_valid": true,
+    "time_pct_valid": true
+  }
+}

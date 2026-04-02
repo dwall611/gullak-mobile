@@ -12,7 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api, clearCache } from '../api/client';
-import { formatCurrency, formatShortDate, getTransactionCategory, getMerchantName, getAccountName } from '../utils/helpers';
+import { formatCurrency, formatShortDate, getTransactionCategory, getAccountName } from '../utils/helpers';
 import { colors, spacing, radius, fontSize, fontWeight } from '../utils/theme';
 
 const RECURRING_OPTIONS = [
@@ -88,7 +88,7 @@ export function TransactionEditModal({ visible, transaction, onClose, onSaved })
     }
   };
 
-  const merchant = tx ? getMerchantName(tx) : '';
+  const merchant = tx ? (tx.merchant_display_name || '') : '';
   const account = tx ? getAccountName(tx) : '';
   const category = tx ? getTransactionCategory(tx) : '';
   const isExpense = tx?.amount > 0;

@@ -13,10 +13,12 @@ import { colors, spacing, radius, fontSize, fontWeight, fontFamily } from '../ut
 import { AlertsScreen } from './AlertsScreen';
 import { CategoryRulesScreen } from './CategoryRulesScreen';
 import { SyncScreen } from './SyncScreen';
+import { RecurringScreen } from './RecurringScreen';
 
 const TABS = [
   { id: 'alerts', label: 'Alerts', icon: 'notifications-outline', Component: AlertsScreen },
   { id: 'categories', label: 'Categories', icon: 'pricetag-outline', Component: CategoryRulesScreen },
+  { id: 'recurring', label: 'Recurring', icon: 'repeat-outline', Component: RecurringScreen },
   { id: 'sync', label: 'Sync', icon: 'sync-outline', Component: SyncScreen },
 ];
 
