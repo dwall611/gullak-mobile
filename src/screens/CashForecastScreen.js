@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,13 +7,11 @@ import {
   RefreshControl,
   ActivityIndicator,
   TouchableOpacity,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api } from '../api/client';
-import { colors, spacing, radius, fontSize, fontWeight, fontFamily } from '../utils/theme';
-import { getManualRecurringForAccount, getMerchantOverride } from '../config/recurring-transactions';
+import { colors, spacing, radius, fontSize, fontWeight } from '../utils/theme';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmt(n) {
@@ -31,35 +29,6 @@ function fmtDate(dateStr) {
   const dt = new Date(+y, +m - 1, +d);
   if (isNaN(dt.getTime())) return dateStr;
   return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' });
-}
-
-function addDays(date, days) {
-  const result = new Date(date);
-  result.setDate(result.getDate() + days);
-  return result;
-}
-
-function formatDateStr(d) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-const STOP_WORDS = new Set(['payment', 'orig', 'entry', 'descr', 'name', 'from', 'with', 'bank', 'card', 'corp', 'inc', 'llc']);
-
-function extractKeyword(merchant) {
-  const words = merchant
-    .toLowerCase()
-    .split(/[\s,_]+/)
-    .filter((w) => w.length > 3 && !STOP_WORDS.has(w) && !/^\d+$/.test(w));
-  return words[0] || '';
-}
-
-function merchantMatches(recurringMerchant, txName) {
-  const kw = extractKeyword(recurringMerchant);
-  if (!kw) return false;
-  return txName.toLowerCase().includes(kw);
 }
 
 // ─── StatCard ─────────────────────────────────────────────────────────────────
@@ -135,19 +104,13 @@ export function CashForecastScreen({ embedded = false }) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
-  const [transactions, setTransactions] = useState([]);
-  const [projected, setProjected] = useState([]);
-  const [account, setAccount] = useState(null);
+  const [forecastData, setForecastData] = useState(null);
   const [checkingAccounts, setCheckingAccounts] = useState([]);
+  const [selectedAccountId, setSelectedAccountId] = useState(null);
   const [selectedAccountName, setSelectedAccountName] = useState('Main Checking');
 
   const now = new Date();
-  const todayStr = formatDateStr(now);
-  const startDate = formatDateStr(new Date(now.getFullYear(), now.getMonth(), 1));
-  const endDate = formatDateStr(new Date(now.getFullYear(), now.getMonth() + 1, 0));
-  const projectionEndDate = formatDateStr(new Date(now.getFullYear(), now.getMonth() + 1, 5));
   const monthLabel = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  const currentMonthStr = startDate.substring(0, 7);
 
   const loadData = useCallback(async () => {
     setError(null);
@@ -155,150 +118,13 @@ export function CashForecastScreen({ embedded = false }) {
       const { accounts } = await api.getAccounts();
       const depAccounts = (accounts || []).filter(a => ['Main Checking', 'Rental'].includes(a.name));
       setCheckingAccounts(depAccounts);
+
       const checking = depAccounts.find(a => a.name === selectedAccountName) || depAccounts[0];
       if (!checking) throw new Error('No checking account found');
-      setAccount(checking);
+      setSelectedAccountId(checking.id);
 
-      const { transactions: txns } = await api.getTransactions({
-        account_id: checking.id,
-        start_date: startDate,
-        end_date: endDate,
-        limit: 500,
-      });
-      const actualTxns = txns || [];
-      setTransactions(actualTxns);
-
-      // Projected recurring
-      const recurringResp = await api.getRecurringTransactions(3);
-      const allRecurring = recurringResp?.data || [];
-      const mainRecurring = allRecurring.filter((r) => r.account === checking.name);
-
-      const projectedRows = [];
-
-      const interval = (rec) => {
-        const avg = rec.avgInterval;
-        if (avg == null || isNaN(avg) || avg <= 0) return 30;
-        return Math.max(Math.round(avg), 7);
-      };
-
-      // Get manual recurring transactions from shared config (matching dashboard)
-      const MANUAL_RECURRING = getManualRecurringForAccount(checking.name);
-
-      const generateDates = (rec) => {
-        const override = getMerchantOverride(rec.merchant);
-        const dom = rec.dayOfMonth ?? rec.day_of_month ?? (override?.dayOfMonth);
-
-        if (dom != null && !isNaN(dom)) {
-          const dates = [];
-          for (let mo = 0; mo <= 1; mo++) {
-            const d = new Date(now.getFullYear(), now.getMonth() + mo, dom);
-            const dStr = formatDateStr(d);
-            if (dStr > projectionEndDate) break;
-            if (dStr <= todayStr) continue;
-            if (override?.skipMonths?.includes(d.getMonth())) continue;
-            dates.push(dStr);
-          }
-          return dates;
-        }
-
-        if (!rec.nextExpected) return [];
-        let cursor = new Date(rec.nextExpected);
-        if (isNaN(cursor.getTime())) return [];
-        const step = interval(rec);
-        while (formatDateStr(cursor) <= todayStr) {
-          cursor = addDays(cursor, step);
-        }
-        const dates = [];
-        while (true) {
-          const d = formatDateStr(cursor);
-          if (d > projectionEndDate) break;
-          dates.push(d);
-          cursor = addDays(cursor, step);
-        }
-        return dates;
-      };
-
-      // Process auto-detected recurring transactions
-      for (const rec of mainRecurring) {
-        const override = getMerchantOverride(rec.merchant);
-        const alreadyPaidThisMonth = actualTxns.some((tx) =>
-          merchantMatches(rec.merchant, tx.merchant_name || tx.name || '')
-        );
-        const step = interval(rec);
-
-        for (const projDateStr of generateDates(rec)) {
-          // For monthly recurrences already paid this month, skip ONLY if the
-          // projected date is still within the current month
-          if (alreadyPaidThisMonth && step >= 28 && projDateStr.substring(0, 7) === currentMonthStr) continue;
-
-          projectedRows.push({
-            id: `proj-${rec.merchant}-${projDateStr}`,
-            date: projDateStr,
-            name: rec.merchant,
-            merchant_name: rec.merchant,
-            amount: override?.amount ?? rec.avgAmount,
-            isProjected: true,
-          });
-        }
-      }
-
-      // Process manual recurring entries
-      for (const manual of MANUAL_RECURRING) {
-        const alreadyPaid = actualTxns.some((tx) =>
-          (tx.merchant_name || tx.name || '').toLowerCase().includes(manual.keyword)
-        );
-
-        for (let mo = 0; mo <= 1; mo++) {
-          const d = new Date(now.getFullYear(), now.getMonth() + mo, manual.dayOfMonth);
-          const dStr = formatDateStr(d);
-          if (dStr <= todayStr || dStr > projectionEndDate) continue;
-          if (manual.skipMonths?.includes(d.getMonth())) continue;
-          // Skip current month if already paid this month
-          if (alreadyPaid && dStr.substring(0, 7) === currentMonthStr) continue;
-
-          projectedRows.push({
-            id: `manual-${manual.id}-${dStr}`,
-            date: dStr,
-            name: manual.merchant,
-            merchant_name: manual.merchant,
-            amount: manual.amount,
-            isProjected: true,
-          });
-        }
-      }
-
-      // CC payments
-      if (checking.name === 'Main Checking') {
-        try {
-          const liabResp = await api.getLiabilities();
-          const creditCards = liabResp?.credit_cards || [];
-          for (const cc of creditCards) {
-            const dueDate = cc.next_payment_due_date;
-            const stmtBal = cc.last_statement_balance;
-            if (!dueDate || !stmtBal || stmtBal <= 0) continue;
-            if (dueDate <= todayStr || dueDate > projectionEndDate) continue;
-            if (cc.payment_recorded) continue; // Skip if payment already recorded (cc_payment_tracking)
-            const mask = cc.mask;
-            const instName = (cc.institution_name || cc.account_name || '').toLowerCase();
-            const alreadyPaid = actualTxns.some((tx) => {
-              const name = (tx.merchant_name || tx.name || '').toLowerCase();
-              return (mask && name.includes(mask)) || (instName && name.includes(instName.split(' ')[0]));
-            });
-            if (alreadyPaid) continue;
-            projectedRows.push({
-              id: `cc-${cc.account_id}-${dueDate}`,
-              date: dueDate,
-              name: `${cc.account_name} payment`,
-              merchant_name: `${cc.account_name} payment`,
-              amount: stmtBal,
-              isProjected: true,
-              isCCPayment: true,
-            });
-          }
-        } catch (_) {}
-      }
-
-      setProjected(projectedRows);
+      const data = await api.getForecastV2(checking.id, 60);
+      setForecastData(data);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -317,48 +143,19 @@ export function CashForecastScreen({ embedded = false }) {
     loadData();
   }, [loadData]);
 
-  const allRows = useMemo(
-    () => [...transactions, ...projected].sort((a, b) => a.date > b.date ? 1 : a.date < b.date ? -1 : 0),
-    [transactions, projected]
-  );
+  // Map server transaction fields to what TransactionRow expects
+  const rows = (forecastData?.transactions || []).map(tx => ({
+    ...tx,
+    merchant_name: tx.merchant_display || tx.name,
+    isProjected: tx.is_projected,
+    isCCPayment: tx.is_cc_payment,
+    runningBalance: tx.running_balance,
+  }));
 
-  const currentBalance = account?.current_balance ?? 0;
-  const yesterday = formatDateStr(addDays(now, -1));
-
-  const rowsWithBalance = useMemo(() => {
-    if (allRows.length === 0) return [];
-    let anchorIdx = -1;
-    for (let i = allRows.length - 1; i >= 0; i--) {
-      if (!allRows[i].isProjected && !allRows[i].isCCPayment && allRows[i].date <= yesterday) {
-        anchorIdx = i;
-        break;
-      }
-    }
-    const balances = new Array(allRows.length);
-    if (anchorIdx === -1) {
-      const todayActual = allRows.filter(r => !r.isProjected && !r.isCCPayment && r.date >= todayStr);
-      let bal = currentBalance + todayActual.reduce((s, r) => s + r.amount, 0);
-      for (let i = 0; i < allRows.length; i++) {
-        bal = bal - allRows[i].amount;
-        balances[i] = bal;
-      }
-    } else {
-      balances[anchorIdx] = currentBalance;
-      for (let i = anchorIdx + 1; i < allRows.length; i++) balances[i] = balances[i - 1] - allRows[i].amount;
-      for (let i = anchorIdx - 1; i >= 0; i--) balances[i] = balances[i + 1] + allRows[i + 1].amount;
-    }
-    return allRows.map((tx, idx) => ({ ...tx, runningBalance: balances[idx] }));
-  }, [allRows, currentBalance, yesterday]);
-
-  const totalDebits = transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
-  const totalCredits = transactions.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
-  const projDebits = projected.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
-  const projCredits = projected.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
-  const netChange = totalCredits - totalDebits;
-
-  const endOfMonthBalance = rowsWithBalance.length > 0
-    ? rowsWithBalance[rowsWithBalance.length - 1].runningBalance
-    : currentBalance;
+  const summary = forecastData?.summary || {};
+  const settledCount = rows.filter(r => !r.is_projected).length;
+  const projectedCount = rows.filter(r => r.is_projected).length;
+  const hasProjected = projectedCount > 0;
 
   if (loading && !refreshing) {
     return (
@@ -423,19 +220,19 @@ export function CashForecastScreen({ embedded = false }) {
       >
         {/* Stat cards */}
         <View style={styles.statsGrid}>
-          <StatCard label="Current Balance" value={fmt(currentBalance)} sub={account?.available_balance != null ? `Avail: ${fmt(account.available_balance)}` : null} color="blue" />
-          <StatCard label="Money In" value={fmt(totalCredits)} sub={projCredits > 0 ? `+${fmt(projCredits)} projected` : null} color="green" />
-          <StatCard label="Money Out" value={fmt(totalDebits)} sub={projDebits > 0 ? `+${fmt(projDebits)} projected` : null} color="red" />
+          <StatCard label="Starting Balance" value={fmt(summary.starting_balance)} color="blue" />
+          <StatCard label="Money In" value={fmt(summary.total_income)} color="green" />
+          <StatCard label="Money Out" value={fmt(summary.total_expense)} color="red" />
           <StatCard
-            label="End of Month Est."
-            value={fmt(endOfMonthBalance)}
-            sub={netChange >= 0 ? '↑ net inflow' : '↓ net outflow'}
-            color={endOfMonthBalance < 0 ? 'red' : 'blue'}
+            label="End of Period Est."
+            value={fmt(summary.ending_balance)}
+            sub={summary.lowest_balance != null ? `Low: ${fmt(summary.lowest_balance)}` : null}
+            color={summary.ending_balance < 0 ? 'red' : 'blue'}
           />
         </View>
 
         {/* Legend */}
-        {projected.length > 0 && (
+        {hasProjected && (
           <View style={styles.legend}>
             <View style={styles.legendItem}>
               <View style={[styles.legendDot, { backgroundColor: colors.projectedAccent }]} />
@@ -451,27 +248,26 @@ export function CashForecastScreen({ embedded = false }) {
         {/* Summary row */}
         <View style={styles.summaryRow}>
           <Text style={styles.summaryText}>
-            {transactions.length} settled · {projected.length} projected
+            {settledCount} settled · {projectedCount} projected
           </Text>
         </View>
 
         {/* Transaction list */}
         <View style={styles.txList}>
-          {rowsWithBalance.length === 0 ? (
+          {rows.length === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons name="calendar-outline" size={36} color={colors.textMuted} />
               <Text style={styles.emptyText}>No transactions for {monthLabel}</Text>
             </View>
           ) : (
             <>
-              {/* Starting Balance Header */}
               <View style={styles.startingBalanceRow}>
                 <Text style={styles.startingBalanceLabel}>Starting Balance</Text>
-                <Text style={[styles.startingBalanceValue, { color: currentBalance < 0 ? colors.expense : colors.text }]}>
-                  {fmt(currentBalance)}
+                <Text style={[styles.startingBalanceValue, { color: summary.starting_balance < 0 ? colors.expense : colors.text }]}>
+                  {fmt(summary.starting_balance)}
                 </Text>
               </View>
-              {rowsWithBalance.map((tx) => <TransactionRow key={tx.id} tx={tx} />)}
+              {rows.map((tx) => <TransactionRow key={tx.id} tx={tx} />)}
             </>
           )}
         </View>

@@ -129,50 +129,7 @@ function AlertBanner({ alerts, onAlertPress, lastUpdated, hasError }) {
   );
 }
 
-// ─── CC Payment Due Banner ─────────────────────────────────────────────────────
-function PaymentDueBanner({ liabilities }) {
-  if (!liabilities) return null;
-  const creditCards = liabilities.credit_cards || [];
-  
-  // Use API's urgency field directly - no local calculation needed
-  // API provides: urgency ('high', 'medium', 'low') and days_until_due
-  const soon = creditCards.filter(cc => {
-    if (!cc.next_payment_due_date) return false;
-    if (!cc.last_statement_balance || cc.last_statement_balance <= 0) return false;
-    if (cc.payment_recorded) return false; // Skip if payment already recorded
-    // Use API's urgency field if available, otherwise fall back to checking is_overdue
-    return cc.is_overdue || cc.urgency === 'high' || cc.urgency === 'medium';
-  });
 
-  if (soon.length === 0) return null;
-
-  return (
-    <View style={styles.section}>
-      {soon.map((cc, idx) => {
-        // Use API's days_until_due and is_overdue fields directly
-        const daysUntil = cc.days_until_due ?? 0;
-        const isOverdue = cc.is_overdue ?? false;
-        const label = isOverdue 
-          ? 'OVERDUE' 
-          : daysUntil === 0 
-            ? 'Due TODAY' 
-            : daysUntil === 1 
-              ? 'Due tomorrow' 
-              : `Due in ${daysUntil} days`;
-        const urgencyColor = isOverdue ? colors.expense : cc.urgency === 'high' ? colors.warning : colors.text;
-        return (
-          <View key={cc.account_id || idx} style={styles.paymentBanner}>
-            <Ionicons name="card-outline" size={18} color={isOverdue ? colors.expense : colors.warning} style={{ marginRight: spacing.sm }} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.paymentTitle}>{cc.institution_name || cc.account_name}</Text>
-              <Text style={[styles.paymentSub, isOverdue && { color: colors.expense }]}>{label} · {fmt(cc.last_statement_balance)}</Text>
-            </View>
-          </View>
-        );
-      })}
-    </View>
-  );
-}
 
 // ─── Summary Cards ────────────────────────────────────────────────────────────
 function OverviewSummaryCards({ stats }) {
@@ -656,9 +613,6 @@ export function OverviewScreen() {
             hasError={alertsError}
           />
 
-          {/* CC Payment Due */}
-          <PaymentDueBanner liabilities={liabilities} />
-
           {/* Summary Cards */}
           <OverviewSummaryCards stats={stats} />
 
@@ -789,26 +743,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     color: colors.textMuted,
   },
-  paymentBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#2d1f0a',
-    borderColor: colors.warning + '44',
-    borderWidth: 1,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.md,
-  },
-  paymentTitle: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold,
-    color: colors.text,
-  },
-  paymentSub: {
-    fontSize: fontSize.xs,
-    color: colors.warning,
-    marginTop: 2,
-  },
+
   summaryGrid: {
     paddingHorizontal: spacing.md,
     gap: spacing.sm,
