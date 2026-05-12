@@ -1,16 +1,13 @@
 // Gullak API Client
 // Connects to backend via Tailscale hostname
 
-const API_BASE = 'http://100.84.80.76:3001/api';
-// Fallback: 'http://DeathStar:3001/api'
+import { API_BASE_URL, API_TIMEOUT_MS, CACHE_TTL_MS, FEATURE_FLAGS } from '../config/config';
 
-const CACHE_TTL = 30 * 1000; // 30 seconds
+const API_BASE = API_BASE_URL;
+const CACHE_TTL = CACHE_TTL_MS;
 const cache = new Map();
 
-// Feature flags (can be fetched from server later)
-const FEATURE_FLAGS = {
-  use_server_forecast_v2: true,
-};
+// Feature flags are imported from config.js
 
 // API version header support
 const DEFAULT_API_VERSION = '1.0';
@@ -40,7 +37,7 @@ export function clearCache(pattern) {
   }
 }
 
-const FETCH_TIMEOUT_MS = 15000; // 15 second timeout to prevent eternal loading
+const FETCH_TIMEOUT_MS = API_TIMEOUT_MS;
 
 /**
  * Check if a feature flag is enabled
@@ -882,7 +879,7 @@ export const api = {
   getExportUrl: (startDate, endDate, accountId) => {
     const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
     if (accountId) params.append('account_id', accountId);
-    return `http://DeathStar:3001/api/export/transactions?${params.toString()}`;
+    return `${API_BASE}/export/transactions?${params.toString()}`;
   },
 
   // --------------------------------------------

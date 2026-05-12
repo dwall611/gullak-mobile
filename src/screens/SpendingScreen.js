@@ -21,6 +21,7 @@ import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler'
 import { api, clearCache } from '../api/client';
 import { formatCurrency, formatDate, formatShortDate } from '../utils/helpers';
 import { surface, text, brand, border, fontFamily, fontSize as fz, fontWeight as fw, barColors, semantic } from '../theme/designTokens';
+import { useRecurringRules, RecurringRuleFormModal } from '../components/RecurringRulesShared';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -478,262 +479,7 @@ function CCLiabilityCard({ card, style }) {
   );
 }
 
-// ─── Recurring Rule Form Modal ─────────────────────────────────────────────────
-const FREQUENCY_OPTIONS = [
-  { value: 'weekly', label: 'Weekly' },
-  { value: 'bi_weekly', label: 'Bi-weekly' },
-  { value: 'monthly', label: 'Monthly' },
-  { value: 'bi_monthly', label: 'Bi-monthly' },
-  { value: 'quarterly', label: 'Quarterly' },
-  { value: 'yearly', label: 'Yearly' },
-];
-
-const NEEDS_DAY_OF_MONTH = ['monthly', 'quarterly', 'yearly'];
-
-function RecurringRuleFormModal({ visible, rule, accounts, categories, onSave, onCancel }) {
-  const [form, setForm] = useState(() => initFormData(rule));
-  const [saving, setSaving] = useState(false);
-
-  function initFormData(r) {
-    if (!r) {
-      return {
-        name: '',
-        match_pattern: '',
-        account_id: '',
-        amount: '',
-        frequency: 'monthly',
-        day_of_month: '',
-        category_id: '',
-        is_subscription: false,
-      };
-    }
-    return {
-      name: r.merchant_name || r.name || '',
-      match_pattern: r.match_pattern || r.name_pattern || r.merchant_name || '',
-      account_id: r.account_id || '',
-      amount: r.amount != null ? String(Math.abs(r.amount)) : '',
-      frequency: (r.frequency || 'monthly').toLowerCase().replace('-', '_').replace(' ', '_'),
-      day_of_month: r.day_of_month != null ? String(r.day_of_month) : '',
-      category_id: r.category_id != null ? String(r.category_id) : '',
-      is_subscription: !!r.is_subscription,
-    };
-  }
-
-  useEffect(() => {
-    setForm(initFormData(rule));
-  }, [rule]);
-
-  const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
-
-  const handleSubmit = async () => {
-    if (!form.match_pattern.trim()) {
-      Alert.alert('Validation Error', 'Pattern is required');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const payload = {
-        merchant_name: form.name || form.match_pattern,
-        name_pattern: form.name || form.match_pattern,
-        match_pattern: form.match_pattern.trim(),
-        account_id: form.account_id || null,
-        amount: form.amount !== '' ? parseFloat(form.amount) : null,
-        frequency: form.frequency,
-        day_of_month: NEEDS_DAY_OF_MONTH.includes(form.frequency) && form.day_of_month
-          ? parseInt(form.day_of_month)
-          : null,
-        category_id: form.category_id ? parseInt(form.category_id) : null,
-        is_subscription: form.is_subscription ? 1 : 0,
-      };
-      await onSave(payload);
-    } catch (err) {
-      // onSave handles alerts
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const showDay = NEEDS_DAY_OF_MONTH.includes(form.frequency);
-
-  return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={onCancel}
-    >
-      <View style={styles.formModal}>
-        <View style={styles.formHeader}>
-          <Text style={styles.formTitle}>{rule ? 'Edit Rule' : 'New Recurring Rule'}</Text>
-          <TouchableOpacity onPress={onCancel} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Ionicons name="close" size={24} color={D.onSurface} />
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView style={styles.formBody} contentContainerStyle={styles.formContent}>
-          {/* Name */}
-          <View style={styles.formField}>
-            <Text style={styles.formLabel}>Rule Name</Text>
-            <TextInput
-              style={styles.formInput}
-              value={form.name}
-              onChangeText={v => set('name', v)}
-              placeholder="e.g., Netflix Subscription"
-              placeholderTextColor={D.onSurfaceVariant}
-            />
-          </View>
-
-          {/* Pattern */}
-          <View style={styles.formField}>
-            <Text style={styles.formLabel}>Pattern *</Text>
-            <TextInput
-              style={styles.formInput}
-              value={form.match_pattern}
-              onChangeText={v => set('match_pattern', v)}
-              placeholder="e.g., *NETFLIX* or SPOTIFY"
-              placeholderTextColor={D.onSurfaceVariant}
-            />
-            <Text style={styles.formHint}>Use * as wildcard</Text>
-          </View>
-
-          {/* Account */}
-          <View style={styles.formField}>
-            <Text style={styles.formLabel}>Account</Text>
-            <View style={styles.formPicker}>
-              <Text style={styles.formPickerText}>
-                {accounts.find(a => String(a.id) === form.account_id)?.name || 'Any account'}
-              </Text>
-              <Ionicons name="chevron-down" size={16} color={D.onSurfaceVariant} />
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-              <TouchableOpacity
-                style={[styles.chip, !form.account_id && styles.chipActive]}
-                onPress={() => set('account_id', '')}
-              >
-                <Text style={[styles.chipText, !form.account_id && styles.chipTextActive]}>Any</Text>
-              </TouchableOpacity>
-              {accounts.map(acc => (
-                <TouchableOpacity
-                  key={acc.id}
-                  style={[styles.chip, form.account_id === String(acc.id) && styles.chipActive]}
-                  onPress={() => set('account_id', String(acc.id))}
-                >
-                  <Text style={[styles.chipText, form.account_id === String(acc.id) && styles.chipTextActive]} numberOfLines={1}>
-                    {acc.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-
-          {/* Amount */}
-          <View style={styles.formField}>
-            <Text style={styles.formLabel}>Expected Amount</Text>
-            <TextInput
-              style={styles.formInput}
-              value={form.amount}
-              onChangeText={v => set('amount', v)}
-              placeholder="e.g., 15.99"
-              placeholderTextColor={D.onSurfaceVariant}
-              keyboardType="decimal-pad"
-            />
-          </View>
-
-          {/* Frequency */}
-          <View style={styles.formField}>
-            <Text style={styles.formLabel}>Frequency *</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-              {FREQUENCY_OPTIONS.map(opt => (
-                <TouchableOpacity
-                  key={opt.value}
-                  style={[styles.chip, form.frequency === opt.value && styles.chipActive]}
-                  onPress={() => set('frequency', opt.value)}
-                >
-                  <Text style={[styles.chipText, form.frequency === opt.value && styles.chipTextActive]}>
-                    {opt.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-
-          {/* Day of Month */}
-          {showDay && (
-            <View style={styles.formField}>
-              <Text style={styles.formLabel}>Day of Month</Text>
-              <TextInput
-                style={[styles.formInput, { width: 100 }]}
-                value={form.day_of_month}
-                onChangeText={v => set('day_of_month', v)}
-                placeholder="1-31"
-                placeholderTextColor={D.onSurfaceVariant}
-                keyboardType="number-pad"
-              />
-            </View>
-          )}
-
-          {/* Category */}
-          <View style={styles.formField}>
-            <Text style={styles.formLabel}>Category</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-              <TouchableOpacity
-                style={[styles.chip, !form.category_id && styles.chipActive]}
-                onPress={() => set('category_id', '')}
-              >
-                <Text style={[styles.chipText, !form.category_id && styles.chipTextActive]}>None</Text>
-              </TouchableOpacity>
-              {categories.map(cat => (
-                <TouchableOpacity
-                  key={cat.id}
-                  style={[styles.chip, form.category_id === String(cat.id) && styles.chipActive]}
-                  onPress={() => set('category_id', String(cat.id))}
-                >
-                  <Text style={[styles.chipText, form.category_id === String(cat.id) && styles.chipTextActive]} numberOfLines={1}>
-                    {cat.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-
-          {/* Subscription toggle */}
-          <TouchableOpacity
-            style={styles.toggleRow}
-            onPress={() => set('is_subscription', !form.is_subscription)}
-            activeOpacity={0.7}
-          >
-            <Ionicons
-              name={form.is_subscription ? 'checkbox' : 'square-outline'}
-              size={22}
-              color={form.is_subscription ? brand.primary : D.onSurfaceVariant}
-            />
-            <Text style={styles.toggleText}>Mark as subscription service</Text>
-          </TouchableOpacity>
-        </ScrollView>
-
-        {/* Footer */}
-        <View style={styles.formFooter}>
-          <TouchableOpacity style={styles.formCancelBtn} onPress={onCancel}>
-            <Text style={styles.formCancelText}>Cancel</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.formSaveBtn, saving && styles.formSaveBtnDisabled]}
-            onPress={handleSubmit}
-            disabled={saving}
-          >
-            {saving ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Text style={styles.formSaveText}>{rule ? 'Update' : 'Save'}</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
+// ─── Recurring rules imported from shared module ────────────────────────────
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function SpendingScreen() {
   const insets     = useSafeAreaInsets();
@@ -763,18 +509,24 @@ export function SpendingScreen() {
   const [liabilitiesData, setLiabilitiesData] = useState(null);
   const [liabilitiesLoading, setLiabilitiesLoading] = useState(false);
 
-  // ── Recurring State ──────────────────────────────────────────────────────
-  const [recurringRules, setRecurringRules] = useState([]);
-  const [recurringStats, setRecurringStats] = useState(null);
-  const [recurringLoading, setRecurringLoading] = useState(false);
+  // ── Recurring State (shared hook) ──────────────────────────────────────────
+  const {
+    rules: recurringRules,
+    stats: recurringStats,
+    accounts,
+    categories,
+    loading: recurringLoading,
+    togglingId: togglingRuleId,
+    deletingId: deletingRuleId,
+    loadRules: loadRecurring,
+    toggleRule: handleToggleRecurring,
+    deleteRule: handleDeleteRecurring,
+    saveRule: handleSaveRuleFromHook,
+  } = useRecurringRules();
   const [recurringFilter, setRecurringFilter] = useState('all'); // all | active | paused | auto
   const [recurringSearch, setRecurringSearch] = useState('');
   const [showRecurringForm, setShowRecurringForm] = useState(false);
   const [editingRule, setEditingRule] = useState(null);
-  const [togglingRuleId, setTogglingRuleId] = useState(null);
-  const [deletingRuleId, setDeletingRuleId] = useState(null);
-  const [accounts, setAccounts] = useState([]);
-  const [categories, setCategories] = useState([]);
 
   const availableMonths = useMemo(() => getAvailableMonths(), []);
 
@@ -927,86 +679,17 @@ export function SpendingScreen() {
     }
   }, []);
 
-  // ── Load Recurring Rules ───────────────────────────────────────────────────
-  const loadRecurring = useCallback(async () => {
-    setRecurringLoading(true);
-    try {
-      const [rulesData, statsData, accountsData, categoriesData] = await Promise.all([
-        api.getRecurringRules(),
-        api.getRecurringStats(),
-        api.getAccounts(),
-        api.getCategories(),
-      ]);
-      setRecurringRules(rulesData?.data || rulesData || []);
-      setRecurringStats(statsData?.summary || statsData || null);
-      setAccounts(accountsData?.accounts || []);
-      setCategories(categoriesData?.categories || []);
-    } catch (err) {
-      console.error('Error loading recurring rules:', err);
-    } finally {
-      setRecurringLoading(false);
-    }
-  }, []);
-
-  // ── Recurring CRUD handlers ────────────────────────────────────────────────
-  const handleToggleRecurring = useCallback(async (rule) => {
-    const id = rule.pattern_id || rule.id;
-    setTogglingRuleId(id);
-    try {
-      await api.updateRecurringRule(id, { is_active: !rule.is_active });
-      setRecurringRules(prev => prev.map(r =>
-        (r.pattern_id || r.id) === id ? { ...r, is_active: !r.is_active } : r
-      ));
-    } catch (err) {
-      Alert.alert('Error', 'Failed to toggle rule');
-    } finally {
-      setTogglingRuleId(null);
-    }
-  }, []);
-
-  const handleDeleteRecurring = useCallback((rule) => {
-    const id = rule.pattern_id || rule.id;
-    const name = rule.merchant_name || rule.match_pattern || rule.name_pattern || 'this rule';
-    Alert.alert(
-      'Delete Rule',
-      `Delete recurring rule for "${name}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            setDeletingRuleId(id);
-            try {
-              await api.deleteRecurringRule(id);
-              setRecurringRules(prev => prev.filter(r => (r.pattern_id || r.id) !== id));
-            } catch (err) {
-              Alert.alert('Error', 'Failed to delete rule');
-            } finally {
-              setDeletingRuleId(null);
-            }
-          },
-        },
-      ]
-    );
-  }, []);
-
+  // ── Recurring CRUD wrappers ────────────────────────────────────────────────
   const handleSaveRecurring = useCallback(async (formData) => {
     try {
-      if (editingRule) {
-        const id = editingRule.pattern_id || editingRule.id;
-        await api.updateRecurringRule(id, formData);
-      } else {
-        await api.createRecurringRule(formData);
-      }
+      await handleSaveRuleFromHook(formData, editingRule);
       setShowRecurringForm(false);
       setEditingRule(null);
-      await loadRecurring();
     } catch (err) {
-      Alert.alert('Error', editingRule ? 'Failed to update rule' : 'Failed to create rule');
+      // hook handles alert
       throw err;
     }
-  }, [editingRule, loadRecurring]);
+  }, [editingRule, handleSaveRuleFromHook]);
 
   const handleEditRecurring = useCallback((rule) => {
     setEditingRule(rule);

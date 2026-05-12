@@ -4,12 +4,7 @@
  * Primary reference: SpendingScreen.js (dark surface system)
  * Secondary reference: TransactionsScreen.js
  *
- * Two background systems exist in the app:
- *   - "Spending system"  → dark charcoal surfaces (#0c0e10 base)
- *   - "Overview system"  → slate surfaces (#0f172a base)
- * We unify around the Spending system for new/updated screens.
- * Screens that already use the Overview system keep their colors via
- * the `slate.*` tokens exported below.
+ * Unified dark charcoal surface system (#0c0e10 base).
  */
 
 // ─── Background & Surface Layer System ───────────────────────────────────────
@@ -28,13 +23,6 @@ export const surface = {
   inputBorder: '#2a2a2a',   // input border
   outline:     '#42494f',   // active borders, separators in Spending system
 
-  // ⚠️ DEPRECATED: Alternative (Slate) system — Overview / CashForecast / etc.
-  // These are kept for backward compatibility with older screens.
-  // Avoid using for new screens — prefer the Spending system (bg, low, base, high).
-  slate:       '#0f172a',   // slate-900
-  slateCard:   '#1e293b',   // slate-800
-  slateBorder: '#334155',   // slate-700
-
   // Transaction-specific
   txDark:      '#131313',   // alternating row bg (even)
   txAlt:       '#1c1b1b',   // alternating row bg (odd)
@@ -50,8 +38,6 @@ export const text = {
   alt:         '#f1f5f9',   // OverviewScreen / lighter primary
   secondary:   '#a6acb3',   // SpendingScreen onSurfaceVariant
   muted:       '#64748b',   // labels, hints, captions
-  slate:       '#94a3b8',   // Overview secondary text (slate-400)
-
   // Table / transaction specific
   txName:      '#e5e2e1',   // transaction name col
   txDate:      '#5a5a5a',   // date column
