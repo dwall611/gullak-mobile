@@ -10,7 +10,7 @@
 
 const env = typeof process !== 'undefined' && process.env ? process.env : {};
 
-export const API_BASE_URL = env.GULLAK_API_URL || 'http://100.84.80.76:3001/api';
+export const API_BASE_URL = env.GULLAK_API_URL || 'https://deathstar.tailbf7035.ts.net:14443/api';
 export const API_TIMEOUT_MS = env.GULLAK_API_TIMEOUT ? parseInt(env.GULLAK_API_TIMEOUT, 10) : 15000;
 export const CACHE_TTL_MS = env.GULLAK_CACHE_TTL ? parseInt(env.GULLAK_CACHE_TTL, 10) : 30000;
 
