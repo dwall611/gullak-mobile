@@ -724,6 +724,30 @@ export const api = {
   },
 
   /**
+   * Toggle a recurring rule active state (pause/resume)
+   * @param {string} patternId - Rule pattern ID
+   * @returns {Promise<any>}
+   */
+  toggleRecurringRule: (patternId) => {
+    clearCache('recurring');
+    return fetchAPI(`/recurring-transactions/${encodeURIComponent(patternId)}/toggle`, { method: 'POST' });
+  },
+
+  /**
+   * Validate (promote) an auto-detected or JEV-detected rule to manual
+   * @param {string} patternId - Rule pattern ID
+   * @param {Object} data - { friendly_name?, account_id?, is_income? }
+   * @returns {Promise<any>}
+   */
+  validateRecurringRule: (patternId, data) => {
+    clearCache('recurring');
+    return fetchAPI(`/recurring-transactions/${encodeURIComponent(patternId)}/validate`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
    * Trigger auto-detection of recurring patterns
    * @returns {Promise<any>}
    */

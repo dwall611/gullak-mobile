@@ -71,7 +71,7 @@ export function useRecurringRules() {
     const id = rule.pattern_id || rule.id;
     setTogglingId(id);
     try {
-      await api.updateRecurringRule(id, { is_active: !rule.is_active });
+      await api.toggleRecurringRule(id);
       setRules(prev => prev.map(r =>
         (r.pattern_id || r.id) === id ? { ...r, is_active: !r.is_active } : r
       ));
@@ -133,10 +133,59 @@ export function useRecurringRules() {
     }
   }, [loadRules]);
 
+  const dismissRule = useCallback((rule) => {
+    const id = rule.pattern_id || rule.id;
+    const name = rule.merchant_name || rule.name || 'this rule';
+    Alert.alert(
+      'Dismiss Rule',
+      `Permanently ignore "${name}"? You won't be prompted about this merchant again.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Ignore',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.dismissRecurringRule(id);
+              setRules(prev => prev.map(r =>
+                (r.pattern_id || r.id) === id ? { ...r, is_dismissed: 1 } : r
+              ));
+            } catch (err) {
+              Alert.alert('Error', 'Failed to dismiss rule');
+            }
+          },
+        },
+      ]
+    );
+  }, []);
+
+  const validateRule = useCallback(async (id, data) => {
+    try {
+      const result = await api.validateRecurringRule(id, data);
+      setRules(prev => prev.map(r =>
+        (r.pattern_id || r.id) === id
+          ? {
+              ...r,
+              source: 'manual',
+              merchant_name: data.friendly_name || r.merchant_name,
+              account_id: data.account_id || r.account_id,
+              is_income: data.is_income ?? r.is_income,
+              ...(result || {}),
+            }
+          : r
+      ));
+      return result;
+    } catch (err) {
+      Alert.alert('Error', 'Failed to validate rule');
+      throw err;
+    }
+  }, []);
+
   return {
     rules, stats, accounts, categories,
     loading, togglingId, deletingId,
     loadRules, toggleRule, deleteRule, saveRule, triggerDetection,
+    dismissRule, validateRule,
   };
 }
 
@@ -319,6 +368,133 @@ export function RecurringRuleFormModal({ visible, rule, accounts, categories, on
     </Modal>
   );
 }
+
+// ─── Validate Modal (for promoting auto/jev → manual) ────────────────────────
+export function ValidateRecurringModal({ visible, rule, accounts, onValidate, onCancel }) {
+  const [friendlyName, setFriendlyName] = useState('');
+  const [accountId, setAccountId] = useState('');
+  const [isIncome, setIsIncome] = useState(false);
+  const [validating, setValidating] = useState(false);
+
+  useEffect(() => {
+    if (rule) {
+      setFriendlyName(rule.merchant_name || rule.name || '');
+      setAccountId(rule.account_id || '');
+      setIsIncome(!!rule.is_income);
+    }
+  }, [rule]);
+
+  const handleSubmit = async () => {
+    if (!friendlyName.trim()) {
+      Alert.alert('Validation Error', 'Friendly name is required');
+      return;
+    }
+    setValidating(true);
+    try {
+      await onValidate(rule.pattern_id || rule.id, {
+        friendly_name: friendlyName.trim(),
+        account_id: accountId || null,
+        is_income: isIncome,
+      });
+    } finally {
+      setValidating(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onCancel}>
+      <View style={formStyles.modal}>
+        <View style={formStyles.header}>
+          <Text style={formStyles.title}>Validate Recurring Rule</Text>
+          <TouchableOpacity onPress={onCancel} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Ionicons name="close" size={24} color={colors.text} />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={formStyles.body} contentContainerStyle={formStyles.content}>
+          <Text style={{ fontSize: fontSize.sm, color: colors.textMuted, fontFamily: 'Inter', marginBottom: spacing.sm }}>
+            Promote this auto-detected rule to a manual recurring rule.
+          </Text>
+
+          <View style={formStyles.field}>
+            <Text style={formStyles.label}>Friendly Name *</Text>
+            <TextInput
+              style={formStyles.input}
+              value={friendlyName}
+              onChangeText={setFriendlyName}
+              placeholder="e.g., Netflix Subscription"
+              placeholderTextColor={colors.textMuted}
+            />
+          </View>
+
+          <View style={formStyles.field}>
+            <Text style={formStyles.label}>Account</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={formStyles.chipRow}>
+              <TouchableOpacity
+                style={[formStyles.chip, !accountId && formStyles.chipActive]}
+                onPress={() => setAccountId('')}
+              >
+                <Text style={[formStyles.chipText, !accountId && formStyles.chipTextActive]}>Any</Text>
+              </TouchableOpacity>
+              {accounts.map(acc => (
+                <TouchableOpacity
+                  key={acc.id || acc.account_id}
+                  style={[formStyles.chip, accountId === String(acc.id || acc.account_id) && formStyles.chipActive]}
+                  onPress={() => setAccountId(String(acc.id || acc.account_id))}
+                >
+                  <Text style={[formStyles.chipText, accountId === String(acc.id || acc.account_id) && formStyles.chipTextActive]} numberOfLines={1}>
+                    {acc.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          <View style={formStyles.field}>
+            <Text style={formStyles.label}>Type</Text>
+            <TouchableOpacity style={validateStyles.toggleRow} onPress={() => setIsIncome(!isIncome)} activeOpacity={0.7}>
+              <Ionicons name={isIncome ? 'checkbox' : 'square-outline'} size={22}
+                color={isIncome ? colors.income : colors.textMuted} />
+              <Text style={validateStyles.toggleText}>Income (expense by default)</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+
+        <View style={formStyles.footer}>
+          <TouchableOpacity style={formStyles.cancelBtn} onPress={onCancel}>
+            <Text style={formStyles.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[formStyles.saveBtn, validating && formStyles.saveBtnDisabled]}
+            onPress={handleSubmit}
+            disabled={validating}
+          >
+            {validating ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={formStyles.saveText}>✓ Validate</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// ─── Validate modal additional styles ────────────────────────────────────────
+const validateStyles = StyleSheet.create({
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  toggleText: {
+    fontSize: fontSize.base,
+    color: colors.text,
+    fontFamily: 'Inter',
+  },
+});
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 const formStyles = StyleSheet.create({
